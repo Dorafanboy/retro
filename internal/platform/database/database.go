@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 
-	"retro_template/internal/config"
 	"retro_template/internal/logger"
 	"retro_template/internal/storage"
 	"retro_template/internal/storage/noop"
 	"retro_template/internal/storage/postgres"
 	"retro_template/internal/storage/sqlite"
+	"retro_template/internal/types"
 )
 
 var (
@@ -23,12 +23,12 @@ var (
 )
 
 // NewTransactionLogger создает экземпляр TransactionLogger на основе переданных параметров.
-func NewTransactionLogger(ctx context.Context, dbType config.DBType, connStr, maxConnsStr string) (storage.TransactionLogger, error) {
+func NewTransactionLogger(ctx context.Context, dbType types.DBType, connStr, maxConnsStr string) (storage.TransactionLogger, error) {
 	var txLogger storage.TransactionLogger
 	var err error
 
 	switch dbType {
-	case config.Postgres:
+	case types.Postgres:
 		if connStr == "" {
 			return nil, fmt.Errorf("для PostgreSQL: %w", ErrMissingConnectionString)
 		}
@@ -37,7 +37,7 @@ func NewTransactionLogger(ctx context.Context, dbType config.DBType, connStr, ma
 		if err != nil {
 			return nil, fmt.Errorf("ошибка подключения к PostgreSQL: %w: %w", ErrDBConnectionFailed, err)
 		}
-	case config.SQLite:
+	case types.SQLite:
 		if connStr == "" {
 			return nil, fmt.Errorf("для SQLite: %w", ErrMissingConnectionString)
 		}
@@ -46,12 +46,12 @@ func NewTransactionLogger(ctx context.Context, dbType config.DBType, connStr, ma
 		if err != nil {
 			return nil, fmt.Errorf("ошибка подключения к SQLite: %w: %w", ErrDBConnectionFailed, err)
 		}
-	case config.None, "":
+	case types.None, "":
 		logger.Info("Логгирование транзакций в БД отключено.")
 		txLogger = noop.NewStore()
 	default:
 		return nil, fmt.Errorf("%w: %s (ожидается '%s', '%s' или '%s')",
-			ErrUnsupportedDBType, dbType, config.Postgres, config.SQLite, config.None)
+			ErrUnsupportedDBType, dbType, types.Postgres, types.SQLite, types.None)
 	}
 
 	return txLogger, nil

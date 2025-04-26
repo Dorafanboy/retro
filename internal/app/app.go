@@ -270,7 +270,7 @@ func (a *Application) selectTasksForWallet() ([]config.TaskConfigEntry, error) {
 
 	selected := availableTasks[:numTasksToSelect]
 
-	if a.cfg.Actions.TaskOrder == config.TaskOrderSequential {
+	if a.cfg.Actions.TaskOrder == types.TaskOrderSequential {
 		logger.Debug("Сортировка выбранных задач по порядку из конфига")
 		originalIndex := make(map[string]int)
 		for idx, taskCfg := range a.cfg.Tasks {

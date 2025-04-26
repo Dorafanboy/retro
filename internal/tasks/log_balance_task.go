@@ -28,7 +28,6 @@ func (t *LogBalanceTask) Run(ctx context.Context, w *wallet.Wallet, client evm.E
 		return fmt.Errorf("ошибка получения баланса: %w", err)
 	}
 
-	// Используем нашу утилиту для конвертации в строку Ether
 	balanceEtherStr := utils.FromWei(balanceWei)
 
 	logger.Success("Баланс получен", "wallet", w.Address.Hex(), "balance_eth", balanceEtherStr)
