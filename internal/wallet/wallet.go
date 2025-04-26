@@ -34,7 +34,6 @@ type Wallet struct {
 }
 
 // LoadWallets reads private keys from a file and returns a slice of Wallet pointers.
-// It skips empty lines, comments (starting with #), and logs warnings for invalid keys.
 func LoadWallets(path string) ([]*Wallet, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -59,7 +58,6 @@ func LoadWallets(path string) ([]*Wallet, error) {
 
 		privateKey, err := crypto.HexToECDSA(privateKeyHex)
 		if err != nil {
-			// Логгируем ошибку, но не прерываем загрузку других ключей
 			logger.Warn("Неверный формат приватного ключа", "line", lineNumber, "file", path, "error", ErrWalletInvalidKey)
 			continue
 		}
@@ -67,7 +65,6 @@ func LoadWallets(path string) ([]*Wallet, error) {
 		publicKey := privateKey.Public()
 		publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
 		if !ok {
-			// Эта ошибка маловероятна, но лучше обработать
 			logger.Warn("Не удалось извлечь публичный ключ ECDSA", "line", lineNumber, "file", path, "error", ErrPublicKeyExtractionFailed)
 			continue
 		}
@@ -80,12 +77,10 @@ func LoadWallets(path string) ([]*Wallet, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		// Ошибка во время сканирования файла
 		return nil, fmt.Errorf("сканирование файла кошельков '%s': %w: %w", path, ErrWalletFileReadFailed, err)
 	}
 
 	if len(wallets) == 0 {
-		// Если после сканирования не найдено ни одного валидного ключа
 		logger.Error("В файле не найдено валидных приватных ключей", "file", path)
 		return nil, fmt.Errorf("%w в файле '%s'", ErrNoValidKeysFound, path)
 	}

@@ -13,13 +13,13 @@ import (
 	"retro_template/internal/evm"
 	"retro_template/internal/logger"
 	"retro_template/internal/tasks"
+	"retro_template/internal/types"
 	"retro_template/internal/utils"
 	"retro_template/internal/wallet"
-	// "go.uber.org/zap"
 )
 
 var (
-	// ErrNoValidTasksSelected indicates that no enabled and registered tasks were found for a wallet based on the current configuration.
+	// ErrNoValidTasksSelected indicates that no enabled and registered tasks were found.
 	ErrNoValidTasksSelected = errors.New("no valid and active tasks selected for the wallet")
 )
 
@@ -33,7 +33,7 @@ type Application struct {
 
 // NewApplication creates a new Application instance.
 func NewApplication(cfg *config.Config, wallets []*wallet.Wallet, registeredTaskNames []string, wg *sync.WaitGroup) *Application {
-	if cfg.Wallets.ProcessOrder == "random" {
+	if cfg.Wallets.ProcessOrder == types.OrderRandom {
 		logger.Info("Перемешивание порядка кошельков...")
 		rand.Shuffle(len(wallets), func(i, j int) {
 			wallets[i], wallets[j] = wallets[j], wallets[i]
@@ -270,7 +270,7 @@ func (a *Application) selectTasksForWallet() ([]config.TaskConfigEntry, error) {
 
 	selected := availableTasks[:numTasksToSelect]
 
-	if a.cfg.Actions.TaskOrder == "sequential" {
+	if a.cfg.Actions.TaskOrder == config.TaskOrderSequential {
 		logger.Debug("Сортировка выбранных задач по порядку из конфига")
 		originalIndex := make(map[string]int)
 		for idx, taskCfg := range a.cfg.Tasks {

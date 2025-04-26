@@ -17,8 +17,6 @@ type store struct {
 }
 
 // NewStore creates a new PostgreSQL transaction logger.
-// It parses maxConnsStr to an integer for pool configuration.
-// It assumes the 'transactions' table already exists.
 func NewStore(ctx context.Context, connectionString string, maxConnsStr string) (storage.TransactionLogger, error) {
 	config, err := pgxpool.ParseConfig(connectionString)
 	if err != nil {
@@ -40,10 +38,9 @@ func NewStore(ctx context.Context, connectionString string, maxConnsStr string) 
 		return nil, fmt.Errorf("unable to create connection pool: %w", err)
 	}
 
-	// Test connection
 	err = pool.Ping(ctx)
 	if err != nil {
-		pool.Close() // Close pool if ping fails
+		pool.Close()
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
 
@@ -63,7 +60,7 @@ func (s *store) LogTransaction(ctx context.Context, record storage.TransactionRe
 		record.Network,
 		record.TxHash,
 		record.Status,
-		record.Error, // Renamed field in SQL query
+		record.Error,
 	)
 
 	if err != nil {

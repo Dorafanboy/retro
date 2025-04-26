@@ -49,9 +49,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go gracefulShutdown(cancel, &wg)
+	go gracefulShutdown(cancel)
 
-	// Загрузка конфигурации (включая настройки БД из файла/окружения)
 	logger.Info("Загрузка конфигурации...", "path", *configPath)
 	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
@@ -65,7 +64,6 @@ func main() {
 	}
 	logger.Info("Конфигурация успешно загружена", "max_parallel", cfg.Concurrency.MaxParallelWallets)
 
-	// Инициализируем логгер транзакций, используя настройки из cfg
 	txLogger, err := database.NewTransactionLogger(ctx, cfg.Database.Type, cfg.Database.ConnectionString, cfg.Database.PoolMaxConns)
 	if err != nil {
 		if errors.Is(err, database.ErrUnsupportedDBType) || errors.Is(err, database.ErrMissingConnectionString) {
@@ -112,7 +110,7 @@ func main() {
 }
 
 // gracefulShutdown handles termination signals.
-func gracefulShutdown(cancel context.CancelFunc, wg *sync.WaitGroup) {
+func gracefulShutdown(cancel context.CancelFunc) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"retro_template/internal/config"
+	"retro_template/internal/types"
 )
 
 // RandomIntInRange returns a random integer within the range [min, max]
@@ -23,10 +24,12 @@ func RandomIntInRange(min, max int) int {
 func RandomDuration(delayRange config.DelayRange) (time.Duration, error) {
 	randomVal := RandomIntInRange(delayRange.Min, delayRange.Max)
 	switch delayRange.Unit {
-	case "seconds":
+	case types.TimeUnitSeconds:
 		return time.Duration(randomVal) * time.Second, nil
-	case "minutes":
+	case types.TimeUnitMinutes:
 		return time.Duration(randomVal) * time.Minute, nil
+	case "":
+		return time.Duration(randomVal) * time.Second, nil
 	default:
 		return 0, fmt.Errorf("unknown delay unit: %s", delayRange.Unit)
 	}

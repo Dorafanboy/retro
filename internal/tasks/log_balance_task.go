@@ -14,15 +14,6 @@ import (
 // LogBalanceTask is a simple task that logs the wallet's balance.
 type LogBalanceTask struct{}
 
-// init registers the task when the package is imported.
-func init() {
-	err := RegisterTask("log_balance", &LogBalanceTask{})
-	if err != nil {
-		// Using panic here because registration failure during init is critical
-		panic(fmt.Sprintf("Failed to register task log_balance: %v", err))
-	}
-}
-
 // Run executes the log balance task.
 func (t *LogBalanceTask) Run(ctx context.Context, w *wallet.Wallet, client evm.EVMClient, taskConfig map[string]interface{}) error {
 	logger.Info("Запуск задачи: log_balance", "wallet", w.Address.Hex())
@@ -42,4 +33,13 @@ func (t *LogBalanceTask) Run(ctx context.Context, w *wallet.Wallet, client evm.E
 
 	logger.Success("Баланс получен", "wallet", w.Address.Hex(), "balance_eth", balanceEtherStr)
 	return nil
+}
+
+// init registers the task when the package is imported.
+func init() {
+	err := RegisterTask("log_balance", &LogBalanceTask{})
+	if err != nil {
+		// Using panic here because registration failure during init is critical
+		panic(fmt.Sprintf("Failed to register task log_balance: %v", err))
+	}
 }

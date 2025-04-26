@@ -45,14 +45,13 @@ type Client struct {
 var _ EVMClient = (*Client)(nil)
 
 // NewClient creates a new EVM client, trying multiple RPC URLs if provided.
-// It uses the passed-in context for dialing and initial ChainID check.
 func NewClient(ctx context.Context, rpcUrls []string) (*Client, error) {
 	if len(rpcUrls) == 0 {
 		return nil, ErrNoRpcUrlsProvided
 	}
 
 	logger.Info("Подключение к EVM узлу...", "rpc_count", len(rpcUrls))
-	var lastErr error // Храним последнюю ошибку для возврата
+	var lastErr error
 
 	for i, url := range rpcUrls {
 		logger.Debug("Попытка подключения", "rpc_url", url, "attempt", i+1)
@@ -69,26 +68,23 @@ func NewClient(ctx context.Context, rpcUrls []string) (*Client, error) {
 				return &Client{ethClient: client, chainID: chainID}, nil
 			}
 			logger.Warn("Подключено, но не удалось получить ChainID", "url", url, "error", err)
-			client.Close() // Закрываем, если не удалось получить ChainID
-			lastErr = err  // Сохраняем ошибку получения ChainID
+			client.Close()
+			lastErr = err
 		} else {
 			logger.Warn("Не удалось подключиться к EVM узлу", "url", url, "error", err)
-			lastErr = err // Сохраняем ошибку подключения
-			// Проверяем отмену родительского контекста
-			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == context.DeadlineExceeded {
+			lastErr = err
+			if errors.Is(err, context.DeadlineExceeded) && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				logger.Warn("Отмена операции подключения из-за таймаута родительского контекста")
 				return nil, ctx.Err()
 			}
-			if errors.Is(err, context.Canceled) && ctx.Err() == context.Canceled {
+			if errors.Is(err, context.Canceled) && errors.Is(ctx.Err(), context.Canceled) {
 				logger.Warn("Отмена операции подключения из-за отмены родительского контекста")
 				return nil, ctx.Err()
 			}
 		}
 	}
 
-	// Если ни один URL не сработал
 	logger.Error("Не удалось подключиться ни к одному из указанных EVM узлов", "last_error", lastErr)
-	// Возвращаем кастомную ошибку, оборачивая последнюю возникшую
 	return nil, fmt.Errorf("%w: %w", ErrEvmClientCreationFailed, lastErr)
 }
 

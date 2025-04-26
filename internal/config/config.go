@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"retro_template/internal/types"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -18,31 +20,30 @@ var (
 )
 
 // DatabaseConfig holds database connection settings.
-// Fields are tagged with omitempty as they can be overridden by environment variables.
 type DatabaseConfig struct {
-	Type             string `yaml:"type,omitempty"`              // Database type (e.g., "postgres", "sqlite", "none"). Env: DB_TYPE
-	ConnectionString string `yaml:"connection_string,omitempty"` // Database connection string. Env: DB_CONNECTION_STRING
-	PoolMaxConns     string `yaml:"pool_max_conns,omitempty"`    // Max connections for the pool (used by postgres). Env: DB_POOL_MAX_CONNS
+	Type             types.DBType `yaml:"type,omitempty"`
+	ConnectionString string       `yaml:"connection_string,omitempty"`
+	PoolMaxConns     string       `yaml:"pool_max_conns,omitempty"`
 }
 
 // TaskConfigEntry defines the structure for a single task entry in the config.
 type TaskConfigEntry struct {
-	Name    string                 `yaml:"name"`    // Name corresponding to a registered TaskRunner
-	Network string                 `yaml:"network"` // Network name (key in RPCNodes map)
-	Enabled bool                   `yaml:"enabled"` // Whether this task configuration is active
-	Params  map[string]interface{} `yaml:"params"`  // Task-specific parameters
+	Name    string                 `yaml:"name"`
+	Network string                 `yaml:"network"`
+	Enabled bool                   `yaml:"enabled"`
+	Params  map[string]interface{} `yaml:"params"`
 }
 
 // Config corresponds to the structure of config.yml
-// Use yaml tags to map the fields.
 type Config struct {
+	LogFilePath string              `yaml:"log_file_path,omitempty"`
 	RPCNodes    map[string][]string `yaml:"rpc_nodes"`
 	Concurrency ConcurrencyConfig   `yaml:"concurrency"`
 	Wallets     WalletsConfig       `yaml:"wallets"`
 	Delay       DelayConfig         `yaml:"delay"`
 	Actions     ActionsConfig       `yaml:"actions"`
 	Tasks       []TaskConfigEntry   `yaml:"tasks"`
-	Database    DatabaseConfig      `yaml:"database"` // Added Database config section
+	Database    DatabaseConfig      `yaml:"database"`
 }
 
 // ConcurrencyConfig holds settings related to parallel execution
@@ -52,7 +53,7 @@ type ConcurrencyConfig struct {
 
 // WalletsConfig holds settings related to wallet processing
 type WalletsConfig struct {
-	ProcessOrder string `yaml:"process_order"`
+	ProcessOrder types.WalletProcessOrder `yaml:"process_order"`
 }
 
 // DelayConfig holds settings for various delays
@@ -65,16 +66,16 @@ type DelayConfig struct {
 
 // ActionsConfig holds settings related to task execution strategy
 type ActionsConfig struct {
-	ActionsPerAccount    MinMax   `yaml:"actions_per_account"`
-	TaskOrder            string   `yaml:"task_order"`
-	ExplicitTaskSequence []string `yaml:"explicit_task_sequence"` // Added for specific task sequences
+	ActionsPerAccount    MinMax          `yaml:"actions_per_account"`
+	TaskOrder            types.TaskOrder `yaml:"task_order"`
+	ExplicitTaskSequence []string        `yaml:"explicit_task_sequence"`
 }
 
 // DelayRange represents a min/max delay with units
 type DelayRange struct {
-	Min  int    `yaml:"min"`
-	Max  int    `yaml:"max"`
-	Unit string `yaml:"unit"`
+	Min  int            `yaml:"min"`
+	Max  int            `yaml:"max"`
+	Unit types.TimeUnit `yaml:"unit"`
 }
 
 // RetryDelay includes the delay range and number of attempts for retries
@@ -89,8 +90,7 @@ type MinMax struct {
 	Max int `yaml:"max"`
 }
 
-// LoadConfig reads the configuration file from the given path and overrides
-// specific fields with environment variables if they are set.
+// LoadConfig reads the configuration file from the given path.
 func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -106,9 +106,8 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("парсинг YAML из '%s': %w: %w", path, ErrConfigParseFailed, err)
 	}
 
-	// Override database settings with environment variables if they exist
-	if dbType := os.Getenv("DB_TYPE"); dbType != "" {
-		cfg.Database.Type = dbType
+	if dbTypeEnv := os.Getenv("DB_TYPE"); dbTypeEnv != "" {
+		cfg.Database.Type = types.DBType(dbTypeEnv)
 	}
 	if dbConnStr := os.Getenv("DB_CONNECTION_STRING"); dbConnStr != "" {
 		cfg.Database.ConnectionString = dbConnStr

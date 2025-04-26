@@ -10,7 +10,7 @@ import (
 	"retro_template/internal/logger"
 	"retro_template/internal/storage"
 
-	_ "github.com/mattn/go-sqlite3" // SQLite driver
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // store implements storage.TransactionLogger using SQLite.
@@ -31,28 +31,24 @@ CREATE TABLE IF NOT EXISTS transactions (
 );`
 
 // NewStore creates a new SQLite transaction logger.
-// It opens the database file at dbPath and ensures the necessary table exists.
 func NewStore(ctx context.Context, dbPath string) (storage.TransactionLogger, error) {
 	logger.Info("Initializing SQLite database...", "path", dbPath)
 
-	// Ensure the directory exists
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create directory for sqlite db %s: %w", dir, err)
 	}
 
-	db, err := sql.Open("sqlite3", dbPath+"?_journal=WAL&_busy_timeout=5000") // Enable WAL for better concurrency
+	db, err := sql.Open("sqlite3", dbPath+"?_journal=WAL&_busy_timeout=5000")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sqlite database at %s: %w", dbPath, err)
 	}
 
-	// Check connection
 	if err = db.PingContext(ctx); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to ping sqlite database at %s: %w", dbPath, err)
 	}
 
-	// Create table if it doesn't exist
 	if _, err = db.ExecContext(ctx, createTableSQL); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to create transactions table: %w", err)
