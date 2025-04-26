@@ -2,8 +2,8 @@
 
 import (
 	"context"
-	
-	"retro_template/internal/storage"
+
+	"retro/internal/storage"
 )
 
 // NoOpStorage is an implementation of TransactionLogger that does nothing.

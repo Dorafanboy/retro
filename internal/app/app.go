@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"retro_template/internal/config"
-	"retro_template/internal/logger"
-	"retro_template/internal/types"
-	"retro_template/internal/utils"
-	"retro_template/internal/wallet"
+	"retro/internal/config"
+	"retro/internal/logger"
+	"retro/internal/types"
+	"retro/internal/utils"
+	"retro/internal/wallet"
 )
 
 // Application holds the core application logic and dependencies.

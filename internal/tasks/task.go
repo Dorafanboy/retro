@@ -2,8 +2,8 @@ package tasks
 
 import (
 	"context"
-	"retro_template/internal/evm"
-	"retro_template/internal/wallet"
+	"retro/internal/evm"
+	"retro/internal/wallet"
 )
 
 // TaskRunner defines the interface for any task that can be executed.

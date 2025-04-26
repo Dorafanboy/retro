@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"retro_template/internal/logger"
+	"retro/internal/logger"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"

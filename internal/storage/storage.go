@@ -3,8 +3,8 @@ package storage
 import (
 	"context"
 	"time"
-	
-	"retro_template/internal/types"
+
+	"retro/internal/types"
 )
 
 // TransactionRecord represents information about an executed transaction attempt.

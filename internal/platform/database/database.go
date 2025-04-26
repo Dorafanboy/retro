@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 
-	"retro_template/internal/logger"
-	"retro_template/internal/storage"
-	"retro_template/internal/storage/noop"
-	"retro_template/internal/storage/postgres"
-	"retro_template/internal/storage/sqlite"
-	"retro_template/internal/types"
+	"retro/internal/logger"
+	"retro/internal/storage"
+	"retro/internal/storage/noop"
+	"retro/internal/storage/postgres"
+	"retro/internal/storage/sqlite"
+	"retro/internal/types"
 )
 
 var (

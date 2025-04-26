@@ -1,4 +1,4 @@
-module retro_template
+module retro
 
 go 1.23.4
 

@@ -11,16 +11,17 @@ import (
 	"syscall"
 	"time"
 
-	"retro_template/internal/app"
-	"retro_template/internal/config"
-	"retro_template/internal/logger"
-	"retro_template/internal/platform/database"
-	"retro_template/internal/tasks"
-	"retro_template/internal/wallet"
+	"retro/internal/app"
+	"retro/internal/config"
+	"retro/internal/logger"
+	"retro/internal/platform/database"
+	"retro/internal/tasks"
+	"retro/internal/wallet"
 
 	"github.com/joho/godotenv"
 
-	_ "retro_template/internal/tasks"
+	_ "retro/internal/tasks"
+	_ "retro/internal/tasks/dummy"
 
 	_ "github.com/mattn/go-sqlite3"
 )

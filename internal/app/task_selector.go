@@ -4,10 +4,10 @@ import (
 	"math/rand"
 	"sort"
 
-	"retro_template/internal/config"
-	"retro_template/internal/logger"
-	"retro_template/internal/types"
-	"retro_template/internal/utils"
+	"retro/internal/config"
+	"retro/internal/logger"
+	"retro/internal/types"
+	"retro/internal/utils"
 )
 
 // TaskSelector is responsible for the logic of selecting tasks to execute.

@@ -11,7 +11,7 @@ build:
 	@go build -o $(TARGET) ./cmd/app/main.go
 
 run:
-	@go run ./cmd/app/main.go --config config/config.yml --wallets local/private_keys.txt
+	@go run ./cmd/app/main.go --config config/config.yml --wallets local/data/private_keys.txt
 
 lint:
 	@golangci-lint run ./...

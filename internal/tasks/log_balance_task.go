@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"retro_template/internal/evm"
-	"retro_template/internal/logger"
-	"retro_template/internal/utils"
-	"retro_template/internal/wallet"
+	"retro/internal/evm"
+	"retro/internal/logger"
+	"retro/internal/utils"
+	"retro/internal/wallet"
 )
 
 // LogBalanceTask is a simple task that logs the wallet's balance.

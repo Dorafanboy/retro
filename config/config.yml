@@ -1,7 +1,7 @@
 rpc_nodes:
   # Placeholder - нужно будет заполнить реальными
-  ethereum: ["YOUR_ETHEREUM_RPC_URL"]
-  arbitrum: ["YOUR_ARBITRUM_RPC_URL"]
+  ethereum: ["https://eth.meowrpc.com"]
+  arbitrum: ["https://arbitrum.drpc.org"]
 
 concurrency:
   max_parallel_wallets: 5 # Пример, можем изменить
@@ -34,3 +34,15 @@ actions: # Настройки выполнения действий
     min: 3
     max: 7
   task_order: "random" # Порядок выполнения выбранных задач ("sequential" или "random")
+
+tasks:
+  - name: log_balance # Пример существующей задачи
+    network: "arbitrum"
+    enabled: true
+    params:
+      token_address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" # USDC
+
+  - name: dummy_task # Добавленная задача-заглушка
+    network: "any" # Сеть не важна для этой задачи
+    enabled: true
+    params: {}

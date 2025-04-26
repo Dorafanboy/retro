@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"retro_template/internal/types"
+	"retro/internal/types"
 
 	"gopkg.in/yaml.v3"
 )

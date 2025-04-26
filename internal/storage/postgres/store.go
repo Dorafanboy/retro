@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"retro_template/internal/logger"
-	"retro_template/internal/storage"
+	"retro/internal/logger"
+	"retro/internal/storage"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )

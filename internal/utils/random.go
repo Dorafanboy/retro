@@ -5,8 +5,8 @@ import (
 	"math/rand"
 	"time"
 
-	"retro_template/internal/config"
-	"retro_template/internal/types"
+	"retro/internal/config"
+	"retro/internal/types"
 )
 
 // RandomIntInRange returns a random integer within the range [min, max]

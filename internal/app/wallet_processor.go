@@ -5,12 +5,12 @@ import (
 	"errors"
 	"time"
 
-	"retro_template/internal/config"
-	"retro_template/internal/evm"
-	"retro_template/internal/logger"
-	"retro_template/internal/tasks"
-	"retro_template/internal/utils"
-	"retro_template/internal/wallet"
+	"retro/internal/config"
+	"retro/internal/evm"
+	"retro/internal/logger"
+	"retro/internal/tasks"
+	"retro/internal/utils"
+	"retro/internal/wallet"
 )
 
 var (

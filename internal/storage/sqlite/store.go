@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"retro_template/internal/logger"
-	"retro_template/internal/storage"
+	"retro/internal/logger"
+	"retro/internal/storage"
 
 	_ "github.com/mattn/go-sqlite3"
 )

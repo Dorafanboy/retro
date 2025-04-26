@@ -7,7 +7,7 @@ import (
 	"math/big"
 	"time"
 
-	"retro_template/internal/logger"
+	"retro/internal/logger"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
