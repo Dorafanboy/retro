@@ -1,11 +1,29 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"gopkg.in/yaml.v3"
 )
+
+var (
+	// ErrConfigNotFound indicates that the configuration file was not found at the specified path.
+	ErrConfigNotFound = errors.New("config file not found")
+	// ErrConfigReadFailed indicates that there was an error reading the configuration file.
+	ErrConfigReadFailed = errors.New("failed to read config file")
+	// ErrConfigParseFailed indicates that the configuration file content is not valid YAML.
+	ErrConfigParseFailed = errors.New("failed to parse config file (invalid YAML)")
+)
+
+// DatabaseConfig holds database connection settings.
+// Fields are tagged with omitempty as they can be overridden by environment variables.
+type DatabaseConfig struct {
+	Type             string `yaml:"type,omitempty"`              // Database type (e.g., "postgres", "sqlite", "none"). Env: DB_TYPE
+	ConnectionString string `yaml:"connection_string,omitempty"` // Database connection string. Env: DB_CONNECTION_STRING
+	PoolMaxConns     string `yaml:"pool_max_conns,omitempty"`    // Max connections for the pool (used by postgres). Env: DB_POOL_MAX_CONNS
+}
 
 // TaskConfigEntry defines the structure for a single task entry in the config.
 type TaskConfigEntry struct {
@@ -24,6 +42,7 @@ type Config struct {
 	Delay       DelayConfig         `yaml:"delay"`
 	Actions     ActionsConfig       `yaml:"actions"`
 	Tasks       []TaskConfigEntry   `yaml:"tasks"`
+	Database    DatabaseConfig      `yaml:"database"` // Added Database config section
 }
 
 // ConcurrencyConfig holds settings related to parallel execution
@@ -70,17 +89,32 @@ type MinMax struct {
 	Max int `yaml:"max"`
 }
 
-// LoadConfig reads the configuration file from the given path
+// LoadConfig reads the configuration file from the given path and overrides
+// specific fields with environment variables if they are set.
 func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config file %s: %w", path, err)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("файл конфигурации '%s': %w", path, ErrConfigNotFound)
+		}
+		return nil, fmt.Errorf("чтение файла '%s': %w: %w", path, ErrConfigReadFailed, err)
 	}
 
 	var cfg Config
 	err = yaml.Unmarshal(data, &cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config data from %s: %w", path, err)
+		return nil, fmt.Errorf("парсинг YAML из '%s': %w: %w", path, ErrConfigParseFailed, err)
+	}
+
+	// Override database settings with environment variables if they exist
+	if dbType := os.Getenv("DB_TYPE"); dbType != "" {
+		cfg.Database.Type = dbType
+	}
+	if dbConnStr := os.Getenv("DB_CONNECTION_STRING"); dbConnStr != "" {
+		cfg.Database.ConnectionString = dbConnStr
+	}
+	if dbPoolMax := os.Getenv("DB_POOL_MAX_CONNS"); dbPoolMax != "" {
+		cfg.Database.PoolMaxConns = dbPoolMax
 	}
 
 	return &cfg, nil

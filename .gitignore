@@ -28,10 +28,10 @@ go.work.sum
 .idea
 
 # local
-**local/
+**local/data/
 
 # Private data
-/local/private_keys.txt
+/local/data/private_keys.txt
 
 # IDE settings
 .vscode/

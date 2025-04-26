@@ -15,6 +15,13 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
+var (
+	// ErrNoRpcUrlsProvided indicates that no RPC URLs were provided for client creation.
+	ErrNoRpcUrlsProvided = errors.New("no RPC URLs provided")
+	// ErrEvmClientCreationFailed indicates that the client failed to connect to any of the provided RPC URLs.
+	ErrEvmClientCreationFailed = errors.New("failed to connect to any provided EVM node")
+)
+
 // EVMClient defines the interface for interacting with an EVM compatible blockchain.
 type EVMClient interface {
 	Close()
@@ -41,38 +48,36 @@ var _ EVMClient = (*Client)(nil)
 // It uses the passed-in context for dialing and initial ChainID check.
 func NewClient(ctx context.Context, rpcUrls []string) (*Client, error) {
 	if len(rpcUrls) == 0 {
-		return nil, errors.New("no RPC URLs provided")
+		return nil, ErrNoRpcUrlsProvided
 	}
 
 	logger.Info("Подключение к EVM узлу...", "rpc_count", len(rpcUrls))
-	var client *ethclient.Client
-	var err error
-	var chainID *big.Int
+	var lastErr error // Храним последнюю ошибку для возврата
 
 	for i, url := range rpcUrls {
 		logger.Debug("Попытка подключения", "rpc_url", url, "attempt", i+1)
 
-		// Используем переданный ctx для создания дочернего с таймаутом
 		dialCtx, dialCancel := context.WithTimeout(ctx, 10*time.Second)
-		client, err = ethclient.DialContext(dialCtx, url)
-		dialCancel() // Отменяем контекст диалера
+		client, err := ethclient.DialContext(dialCtx, url)
+		dialCancel()
 		if err == nil {
-			// Используем переданный ctx для получения ChainID
 			chainCtx, chainCancel := context.WithTimeout(ctx, 5*time.Second)
-			chainID, err = client.ChainID(chainCtx)
-			chainCancel() // Отменяем контекст запроса ChainID
+			chainID, err := client.ChainID(chainCtx)
+			chainCancel()
 			if err == nil {
 				logger.Success("Подключено к EVM узлу", "url", url, "chain_id", chainID.String())
 				return &Client{ethClient: client, chainID: chainID}, nil
 			}
 			logger.Warn("Подключено, но не удалось получить ChainID", "url", url, "error", err)
-			client.Close()
+			client.Close() // Закрываем, если не удалось получить ChainID
+			lastErr = err  // Сохраняем ошибку получения ChainID
 		} else {
 			logger.Warn("Не удалось подключиться к EVM узлу", "url", url, "error", err)
-			// Проверяем, не была ли ошибка вызвана отменой родительского контекста
+			lastErr = err // Сохраняем ошибку подключения
+			// Проверяем отмену родительского контекста
 			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == context.DeadlineExceeded {
 				logger.Warn("Отмена операции подключения из-за таймаута родительского контекста")
-				return nil, ctx.Err() // Возвращаем ошибку родительского контекста
+				return nil, ctx.Err()
 			}
 			if errors.Is(err, context.Canceled) && ctx.Err() == context.Canceled {
 				logger.Warn("Отмена операции подключения из-за отмены родительского контекста")
@@ -81,8 +86,10 @@ func NewClient(ctx context.Context, rpcUrls []string) (*Client, error) {
 		}
 	}
 
-	logger.Error("Не удалось подключиться ни к одному из указанных EVM узлов", "last_error", err)
-	return nil, fmt.Errorf("failed to connect to any provided EVM node: %w", err)
+	// Если ни один URL не сработал
+	logger.Error("Не удалось подключиться ни к одному из указанных EVM узлов", "last_error", lastErr)
+	// Возвращаем кастомную ошибку, оборачивая последнюю возникшую
+	return nil, fmt.Errorf("%w: %w", ErrEvmClientCreationFailed, lastErr)
 }
 
 // Close terminates the underlying RPC connection

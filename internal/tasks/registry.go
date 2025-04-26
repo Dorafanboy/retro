@@ -1,8 +1,16 @@
 package tasks
 
 import (
+	"errors"
 	"fmt"
 	"sync"
+)
+
+var (
+	// ErrTaskAlreadyRegistered indicates that a task with the same name is already registered.
+	ErrTaskAlreadyRegistered = errors.New("task already registered")
+	// ErrTaskNotFound indicates that a task with the given name was not found in the registry.
+	ErrTaskNotFound = errors.New("task not found in registry")
 )
 
 // registry stores registered TaskRunner implementations by name.
@@ -17,7 +25,7 @@ func RegisterTask(name string, runner TaskRunner) error {
 	defer regMux.Unlock()
 
 	if _, exists := registry[name]; exists {
-		return fmt.Errorf("task with name '%s' already registered", name)
+		return fmt.Errorf("%w: %s", ErrTaskAlreadyRegistered, name)
 	}
 	registry[name] = runner
 	return nil
@@ -30,7 +38,7 @@ func GetTask(name string) (TaskRunner, error) {
 
 	runner, exists := registry[name]
 	if !exists {
-		return nil, fmt.Errorf("task with name '%s' not found", name)
+		return nil, fmt.Errorf("task '%s': %w", name, ErrTaskNotFound)
 	}
 	return runner, nil
 }

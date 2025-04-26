@@ -2,11 +2,10 @@ package logger
 
 import (
 	"fmt"
+	"github.com/fatih/color"
 	"path/filepath"
 	"runtime"
 	"time"
-
-	"github.com/fatih/color"
 )
 
 var (
@@ -22,6 +21,90 @@ var (
 	boldColor   = color.New(color.Bold).SprintFunc()
 	moduleColor = color.New(color.FgMagenta, color.Bold).SprintFunc()
 )
+
+// Info logs an informational message.
+func Info(message string, fields ...interface{}) {
+	printMessage(infoColor("INFO"), message, false, fields...)
+}
+
+// InfoWithBlankLine logs an informational message and adds a blank line after it.
+func InfoWithBlankLine(message string, fields ...interface{}) {
+	printMessage(infoColor("INFO"), message, true, fields...)
+}
+
+// Warn logs a warning message.
+func Warn(message string, fields ...interface{}) {
+	printMessage(warnColor("WARN"), message, false, fields...)
+}
+
+// WarnWithBlankLine logs a warning message and adds a blank line after it.
+func WarnWithBlankLine(message string, fields ...interface{}) {
+	printMessage(warnColor("WARN"), message, true, fields...)
+}
+
+// Error logs an error message.
+func Error(message string, fields ...interface{}) {
+	printMessage(errorColor("ERROR"), message, false, fields...)
+}
+
+// ErrorWithBlankLine logs an error message and adds a blank line after it.
+func ErrorWithBlankLine(message string, fields ...interface{}) {
+	printMessage(errorColor("ERROR"), message, true, fields...)
+}
+
+// Debug logs a debug message.
+func Debug(message string, fields ...interface{}) {
+	printMessage(debugColor("DEBUG"), message, false, fields...)
+}
+
+// DebugWithBlankLine logs a debug message and adds a blank line after it.
+func DebugWithBlankLine(message string, fields ...interface{}) {
+	printMessage(debugColor("DEBUG"), message, true, fields...)
+}
+
+// Success logs a success message.
+func Success(message string, fields ...interface{}) {
+	printMessage(successColor("SUCCESS"), message, false, fields...)
+}
+
+// SuccessWithBlankLine logs a success message and adds a blank line after it.
+func SuccessWithBlankLine(message string, fields ...interface{}) {
+	printMessage(successColor("SUCCESS"), message, true, fields...)
+}
+
+// Highlight logs a highlighted message.
+func Highlight(message string, fields ...interface{}) {
+	printMessage(highlightColor("HIGHLIGHT"), message, false, fields...)
+}
+
+// HighlightWithBlankLine logs a highlighted message and adds a blank line after it.
+func HighlightWithBlankLine(message string, fields ...interface{}) {
+	printMessage(highlightColor("HIGHLIGHT"), message, true, fields...)
+}
+
+// Fatal logs a fatal error message and terminates the program via panic.
+func Fatal(message string, fields ...interface{}) {
+	printMessage(errorColor("FATAL"), message, false, fields...)
+	panic(message) // Panic is used to stop execution immediately
+}
+
+// FatalWithBlankLine logs a fatal error message, adds a blank line, and terminates.
+func FatalWithBlankLine(message string, fields ...interface{}) {
+	printMessage(errorColor("FATAL"), message, true, fields...)
+	panic(message)
+}
+
+// printMessage is the internal function for formatting and printing the log message.
+func printMessage(level, message string, addBlankLine bool, fields ...interface{}) {
+	formattedPrefix := formatMessage(level, message, fields...)
+	formattedFields := formatFields(fields...)
+
+	fmt.Println(formattedPrefix + formattedFields)
+
+	if addBlankLine {
+		fmt.Println()
+	}
+}
 
 // formatCaller returns information about the call site (file:line)
 func formatCaller() string {
@@ -126,88 +209,4 @@ func formatFields(fields ...interface{}) string {
 		}
 	}
 	return result
-}
-
-// Info logs an informational message.
-func Info(message string, fields ...interface{}) {
-	printMessage(infoColor("INFO"), message, false, fields...)
-}
-
-// InfoWithBlankLine logs an informational message and adds a blank line after it.
-func InfoWithBlankLine(message string, fields ...interface{}) {
-	printMessage(infoColor("INFO"), message, true, fields...)
-}
-
-// Warn logs a warning message.
-func Warn(message string, fields ...interface{}) {
-	printMessage(warnColor("WARN"), message, false, fields...)
-}
-
-// WarnWithBlankLine logs a warning message and adds a blank line after it.
-func WarnWithBlankLine(message string, fields ...interface{}) {
-	printMessage(warnColor("WARN"), message, true, fields...)
-}
-
-// Error logs an error message.
-func Error(message string, fields ...interface{}) {
-	printMessage(errorColor("ERROR"), message, false, fields...)
-}
-
-// ErrorWithBlankLine logs an error message and adds a blank line after it.
-func ErrorWithBlankLine(message string, fields ...interface{}) {
-	printMessage(errorColor("ERROR"), message, true, fields...)
-}
-
-// Debug logs a debug message.
-func Debug(message string, fields ...interface{}) {
-	printMessage(debugColor("DEBUG"), message, false, fields...)
-}
-
-// DebugWithBlankLine logs a debug message and adds a blank line after it.
-func DebugWithBlankLine(message string, fields ...interface{}) {
-	printMessage(debugColor("DEBUG"), message, true, fields...)
-}
-
-// Success logs a success message.
-func Success(message string, fields ...interface{}) {
-	printMessage(successColor("SUCCESS"), message, false, fields...)
-}
-
-// SuccessWithBlankLine logs a success message and adds a blank line after it.
-func SuccessWithBlankLine(message string, fields ...interface{}) {
-	printMessage(successColor("SUCCESS"), message, true, fields...)
-}
-
-// Highlight logs a highlighted message.
-func Highlight(message string, fields ...interface{}) {
-	printMessage(highlightColor("HIGHLIGHT"), message, false, fields...)
-}
-
-// HighlightWithBlankLine logs a highlighted message and adds a blank line after it.
-func HighlightWithBlankLine(message string, fields ...interface{}) {
-	printMessage(highlightColor("HIGHLIGHT"), message, true, fields...)
-}
-
-// Fatal logs a fatal error message and terminates the program via panic.
-func Fatal(message string, fields ...interface{}) {
-	printMessage(errorColor("FATAL"), message, false, fields...)
-	panic(message) // Panic is used to stop execution immediately
-}
-
-// FatalWithBlankLine logs a fatal error message, adds a blank line, and terminates.
-func FatalWithBlankLine(message string, fields ...interface{}) {
-	printMessage(errorColor("FATAL"), message, true, fields...)
-	panic(message)
-}
-
-// printMessage is the internal function for formatting and printing the log message.
-func printMessage(level, message string, addBlankLine bool, fields ...interface{}) {
-	formattedPrefix := formatMessage(level, message, fields...)
-	formattedFields := formatFields(fields...)
-
-	fmt.Println(formattedPrefix + formattedFields)
-
-	if addBlankLine {
-		fmt.Println()
-	}
 }
