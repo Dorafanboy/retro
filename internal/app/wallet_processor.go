@@ -42,7 +42,7 @@ func newWalletProcessor(cfg *config.Config, w *wallet.Wallet, index int, registe
 
 // Process processes one wallet: selects tasks, executes them with retries and delays.
 func (wp *WalletProcessor) Process(ctx context.Context) {
-	logger.Info("-------------------- Начало обработки кошелька --------------------",
+	logger.InfoWithBlankLine("-------------------- Начало обработки кошелька --------------------",
 		"wIdx", wp.walletIndex+1,
 		"addr", wp.wallet.Address.Hex())
 
@@ -78,14 +78,18 @@ func (wp *WalletProcessor) Process(ctx context.Context) {
 		default:
 		}
 
-		logger.Info("------ Начало задачи ------",
+		logger.InfoWithBlankLine("------ Начало задачи ------",
 			"taskIdx", taskIndex+1,
 			"task", taskEntry.Name,
 			"net", taskEntry.Network,
 			"wIdx", wp.walletIndex+1,
 			"addr", wp.wallet.Address.Hex())
 
-		runner, err := tasks.GetTask(taskEntry.Name)
+		var client *evm.Client
+		var err error
+		var runner tasks.TaskRunner
+
+		runner, err = tasks.GetTask(taskEntry.Name)
 		if err != nil {
 			if errors.Is(err, tasks.ErrTaskNotFound) {
 				logger.Error("Задача не найдена в реестре, пропуск",
@@ -103,50 +107,56 @@ func (wp *WalletProcessor) Process(ctx context.Context) {
 			continue
 		}
 
-		rpcUrls, ok := wp.cfg.RPCNodes[taskEntry.Network]
-		if !ok || len(rpcUrls) == 0 {
-			logger.Error("Не найдены RPC URL для сети, пропуск задачи",
-				"task", taskEntry.Name,
+		if taskEntry.Network != "any" {
+			rpcUrls, ok := wp.cfg.RPCNodes[taskEntry.Network]
+			if !ok || len(rpcUrls) == 0 {
+				logger.Error("Не найдены RPC URL для сети, пропуск задачи",
+					"task", taskEntry.Name,
+					"net", taskEntry.Network,
+					"wIdx", wp.walletIndex+1,
+					"addr", wp.wallet.Address.Hex())
+				continue
+			}
+
+			logger.Debug("Создание EVM клиента",
 				"net", taskEntry.Network,
 				"wIdx", wp.walletIndex+1,
 				"addr", wp.wallet.Address.Hex())
-			continue
-		}
-
-		logger.Debug("Создание EVM клиента",
-			"net", taskEntry.Network,
-			"wIdx", wp.walletIndex+1,
-			"addr", wp.wallet.Address.Hex())
-		client, err := evm.NewClient(ctx, rpcUrls)
-		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				logger.Warn("Создание EVM клиента прервано (контекст)",
-					"task", taskEntry.Name,
-					"err", err,
-					"wIdx", wp.walletIndex+1,
-					"addr", wp.wallet.Address.Hex())
-				return
-			} else if errors.Is(err, evm.ErrEvmClientCreationFailed) || errors.Is(err, evm.ErrNoRpcUrlsProvided) {
-				logger.Error("Не удалось создать EVM клиент (нет RPC/ошибка), пропуск",
-					"task", taskEntry.Name,
-					"net", taskEntry.Network,
-					"err", err,
-					"wIdx", wp.walletIndex+1,
-					"addr", wp.wallet.Address.Hex())
-			} else {
-				logger.Error("Непредвиденная ошибка при создании EVM клиента, пропуск",
-					"task", taskEntry.Name,
-					"net", taskEntry.Network,
-					"err", err,
-					"wIdx", wp.walletIndex+1,
-					"addr", wp.wallet.Address.Hex())
+			client, err = evm.NewClient(ctx, rpcUrls)
+			if err != nil {
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					logger.Warn("Создание EVM клиента прервано (контекст)",
+						"task", taskEntry.Name,
+						"err", err,
+						"wIdx", wp.walletIndex+1,
+						"addr", wp.wallet.Address.Hex())
+					return
+				} else if errors.Is(err, evm.ErrEvmClientCreationFailed) || errors.Is(err, evm.ErrNoRpcUrlsProvided) {
+					logger.Error("Не удалось создать EVM клиент (нет RPC/ошибка), пропуск",
+						"task", taskEntry.Name,
+						"net", taskEntry.Network,
+						"err", err,
+						"wIdx", wp.walletIndex+1,
+						"addr", wp.wallet.Address.Hex())
+				} else {
+					logger.Error("Непредвиденная ошибка при создании EVM клиента, пропуск",
+						"task", taskEntry.Name,
+						"net", taskEntry.Network,
+						"err", err,
+						"wIdx", wp.walletIndex+1,
+						"addr", wp.wallet.Address.Hex())
+				}
+				continue
 			}
-			continue
+			defer client.Close()
+		} else {
+			logger.Debug("Пропуск создания EVM клиента для задачи с сетью 'any'",
+				"task", taskEntry.Name,
+				"wIdx", wp.walletIndex+1)
 		}
 
 		wp.taskExecutor.ExecuteTaskWithRetries(ctx, wp.wallet, client, taskEntry, runner)
-		client.Close()
-		logger.Info("------ Конец задачи ------",
+		logger.InfoWithBlankLine("------ Конец задачи ------",
 			"task", taskEntry.Name,
 			"wIdx", wp.walletIndex+1,
 			"addr", wp.wallet.Address.Hex())
@@ -176,7 +186,7 @@ func (wp *WalletProcessor) Process(ctx context.Context) {
 		}
 	}
 
-	logger.Info("-------------------- Конец обработки кошелька ---------------------",
+	logger.InfoWithBlankLine("-------------------- Конец обработки кошелька ---------------------",
 		"wIdx", wp.walletIndex+1,
 		"addr", wp.wallet.Address.Hex())
 }

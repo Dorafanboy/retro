@@ -12,7 +12,7 @@ import (
 	"retro/internal/wallet"
 )
 
-// TaskExecutor is responsible for executing a single task with retrace logic.\
+// TaskExecutor is responsible for executing a single task with retrace logic.
 type TaskExecutor struct {
 	cfg *config.Config
 }
@@ -48,8 +48,7 @@ func (te *TaskExecutor) ExecuteTaskWithRetries(
 		taskErr = runner.Run(ctx, wallet, client, taskEntry.Params)
 		if taskErr == nil {
 			success = true
-			logger.Success(
-				"Задача успешно выполнена",
+			logger.SuccessWithBlankLine("Задача успешно выполнена",
 				"task", taskEntry.Name,
 				"attempt", attempt,
 				"wallet", wallet.Address.Hex())
@@ -78,9 +77,10 @@ func (te *TaskExecutor) ExecuteTaskWithRetries(
 	}
 
 	if !success {
-		logger.Error("Задача не выполнена после всех попыток",
-			"task", taskEntry.Name, "err",
-			taskErr, "wallet", wallet.Address.Hex())
+		logger.ErrorWithBlankLine("Задача не выполнена после всех попыток",
+			"task", taskEntry.Name,
+			"err", taskErr,
+			"wallet", wallet.Address.Hex())
 		if te.cfg.Delay.AfterError.Min > 0 || te.cfg.Delay.AfterError.Max > 0 {
 			afterErrorDelay, delayErr := utils.RandomDuration(te.cfg.Delay.AfterError)
 			if delayErr != nil {

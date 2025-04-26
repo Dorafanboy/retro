@@ -29,6 +29,7 @@ go.work.sum
 
 # local
 **local/data/
+local/db/
 
 # Private data
 /local/data/private_keys.txt
