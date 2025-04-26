@@ -1,0 +1,36 @@
+rpc_nodes:
+  # Placeholder - нужно будет заполнить реальными
+  ethereum: ["YOUR_ETHEREUM_RPC_URL"]
+  arbitrum: ["YOUR_ARBITRUM_RPC_URL"]
+
+concurrency:
+  max_parallel_wallets: 5 # Пример, можем изменить
+
+wallets: # Настройки обработки кошельков
+  process_order: "random" # Порядок обработки кошельков ("sequential" или "random")
+
+delay: # задержки
+  between_accounts: # задержка между обработкой РАЗНЫХ аккаунтов
+    min: 20
+    max: 35
+    unit: "minutes"
+  between_actions: # задержка между РАЗНЫМИ задачами для ОДНОГО аккаунта
+    min: 30
+    max: 120
+    unit: "seconds"
+  after_error: # задержка после ошибки при выполнении задачи для аккаунта
+    min: 10
+    max: 30
+    unit: "seconds"
+  between_retries: # настройки повторных попыток при ошибках сети/RPC
+    delay: # задержка между попытками
+      min: 5
+      max: 10
+      unit: "seconds"
+    attempts: 15  # максимальное количество попыток
+
+actions: # Настройки выполнения действий
+  actions_per_account: # Количество случайных задач для выполнения на одном аккаунте за запуск
+    min: 3
+    max: 7
+  task_order: "random" # Порядок выполнения выбранных задач ("sequential" или "random")
