@@ -8,7 +8,9 @@ import (
 	"retro/internal/config"
 	"retro/internal/evm"
 	"retro/internal/logger"
+	"retro/internal/storage"
 	"retro/internal/tasks"
+	"retro/internal/types"
 	"retro/internal/utils"
 	"retro/internal/wallet"
 )
@@ -24,10 +26,11 @@ type WalletProcessor struct {
 	walletIndex  int
 	taskSelector *TaskSelector
 	taskExecutor *TaskExecutor
+	txLogger     storage.TransactionLogger
 }
 
 // newWalletProcessor creates a new WalletProcessor instance.
-func newWalletProcessor(cfg *config.Config, w *wallet.Wallet, index int, registeredTaskNames []string) *WalletProcessor {
+func newWalletProcessor(cfg *config.Config, w *wallet.Wallet, index int, registeredTaskNames []string, txLogger storage.TransactionLogger) *WalletProcessor {
 	taskSelector := newTaskSelector(cfg, registeredTaskNames)
 	taskExecutor := newTaskExecutor(cfg)
 
@@ -37,6 +40,7 @@ func newWalletProcessor(cfg *config.Config, w *wallet.Wallet, index int, registe
 		walletIndex:  index,
 		taskSelector: taskSelector,
 		taskExecutor: taskExecutor,
+		txLogger:     txLogger,
 	}
 }
 
@@ -148,14 +152,42 @@ func (wp *WalletProcessor) Process(ctx context.Context) {
 				}
 				continue
 			}
-			defer client.Close()
 		} else {
 			logger.Debug("Пропуск создания EVM клиента для задачи с сетью 'any'",
 				"task", taskEntry.Name,
 				"wIdx", wp.walletIndex+1)
 		}
 
-		wp.taskExecutor.ExecuteTaskWithRetries(ctx, wp.wallet, client, taskEntry, runner)
+		executionErr := wp.taskExecutor.ExecuteTaskWithRetries(ctx, wp.wallet, client, taskEntry, runner)
+
+		// Формируем и логируем запись о транзакции/задаче
+		record := storage.TransactionRecord{
+			Timestamp:     time.Now(),
+			WalletAddress: wp.wallet.Address.Hex(),
+			TaskName:      taskEntry.Name,
+			Network:       taskEntry.Network,
+			// TxHash:      "", // Пока не получаем хэш от задач
+		}
+		if executionErr != nil {
+			record.Status = types.TxStatusFailed
+			record.Error = executionErr.Error()
+			// Лог ошибки уже есть внутри ExecuteTaskWithRetries
+		} else {
+			record.Status = types.TxStatusSuccess
+		}
+
+		if logErr := wp.txLogger.LogTransaction(ctx, record); logErr != nil {
+			// Логируем ошибку записи в БД, но не прерываем выполнение для других задач
+			logger.Error("Не удалось записать лог транзакции в БД",
+				"task", taskEntry.Name,
+				"err", logErr,
+				"wIdx", wp.walletIndex+1,
+				"addr", wp.wallet.Address.Hex())
+		}
+
+		if client != nil {
+			// defer client.Close() // Перенесено
+		}
 		logger.InfoWithBlankLine("------ Конец задачи ------",
 			"task", taskEntry.Name,
 			"wIdx", wp.walletIndex+1,

@@ -28,10 +28,10 @@ func newTaskExecutor(cfg *config.Config) *TaskExecutor {
 func (te *TaskExecutor) ExecuteTaskWithRetries(
 	ctx context.Context,
 	wallet *wallet.Wallet,
-	client *evm.Client,
+	client evm.EVMClient,
 	taskEntry config.TaskConfigEntry,
 	runner tasks.TaskRunner,
-) {
+) error {
 	var taskErr error
 	success := false
 	maxAttempts := te.cfg.Delay.BetweenRetries.Attempts
@@ -95,4 +95,6 @@ func (te *TaskExecutor) ExecuteTaskWithRetries(
 			}
 		}
 	}
+
+	return taskErr
 }

@@ -16,6 +16,18 @@ type store struct {
 	pool *pgxpool.Pool
 }
 
+const createTableSQL = `
+CREATE TABLE IF NOT EXISTS transactions (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ NOT NULL,
+    wallet_address VARCHAR(42) NOT NULL,
+    task_name VARCHAR(255) NOT NULL,
+    network VARCHAR(255) NOT NULL,
+    tx_hash VARCHAR(66),
+    status VARCHAR(50) NOT NULL,
+    error_message TEXT
+);`
+
 // NewStore creates a new PostgreSQL transaction logger.
 func NewStore(ctx context.Context, connectionString string, maxConnsStr string) (storage.TransactionLogger, error) {
 	config, err := pgxpool.ParseConfig(connectionString)
@@ -38,14 +50,28 @@ func NewStore(ctx context.Context, connectionString string, maxConnsStr string) 
 		return nil, fmt.Errorf("unable to create connection pool: %w", err)
 	}
 
+	// Defer closing the pool if initialization fails after this point
+	defer func() {
+		if err != nil && pool != nil {
+			pool.Close()
+		}
+	}()
+
 	err = pool.Ping(ctx)
 	if err != nil {
-		pool.Close()
+		// pool is closed by defer
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
 
+	// Create table if it doesn't exist
+	if _, err = pool.Exec(ctx, createTableSQL); err != nil {
+		// pool is closed by defer
+		return nil, fmt.Errorf("failed to create transactions table: %w", err)
+	}
+	logger.Info("Table 'transactions' initialized successfully (or already existed).")
+
 	logger.Success("Successfully connected to PostgreSQL.")
-	return &store{pool: pool}, nil
+	return &store{pool: pool}, nil // Return nil error on success
 }
 
 // LogTransaction saves a transaction record to the 'transactions' table.

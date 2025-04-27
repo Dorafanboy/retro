@@ -8,6 +8,7 @@ import (
 
 	"retro/internal/config"
 	"retro/internal/logger"
+	"retro/internal/storage"
 	"retro/internal/types"
 	"retro/internal/utils"
 	"retro/internal/wallet"
@@ -19,10 +20,11 @@ type Application struct {
 	wallets             []*wallet.Wallet
 	registeredTaskNames []string
 	wg                  *sync.WaitGroup
+	txLogger            storage.TransactionLogger
 }
 
 // NewApplication creates a new Application instance.
-func NewApplication(cfg *config.Config, wallets []*wallet.Wallet, registeredTaskNames []string, wg *sync.WaitGroup) *Application {
+func NewApplication(cfg *config.Config, wallets []*wallet.Wallet, registeredTaskNames []string, wg *sync.WaitGroup, txLogger storage.TransactionLogger) *Application {
 	if cfg.Wallets.ProcessOrder == types.OrderRandom {
 		logger.Info("Перемешивание порядка кошельков...")
 		rand.Shuffle(len(wallets), func(i, j int) {
@@ -34,6 +36,7 @@ func NewApplication(cfg *config.Config, wallets []*wallet.Wallet, registeredTask
 		wallets:             wallets,
 		registeredTaskNames: registeredTaskNames,
 		wg:                  wg,
+		txLogger:            txLogger,
 	}
 }
 
@@ -43,36 +46,34 @@ func (a *Application) Run(ctx context.Context) {
 
 	for i, w := range a.wallets {
 		a.wg.Add(1)
-		processor := newWalletProcessor(a.cfg, w, i, a.registeredTaskNames)
-
-		go func(p *WalletProcessor, walletIndex int) {
+		go func(currentWallet *wallet.Wallet, walletIndex int) {
 			defer a.wg.Done()
 
 			select {
 			case <-ctx.Done():
-				logger.Warn("Обработка кошелька пропущена (контекст отменен перед стартом)")
+				logger.Warn("Обработка кошелька пропущена (контекст отменен перед стартом)", "wIdx", walletIndex, "addr", currentWallet.Address.Hex())
 				return
 			default:
 			}
 
-			p.Process(ctx)
+			processor := newWalletProcessor(a.cfg, currentWallet, walletIndex, a.registeredTaskNames, a.txLogger)
+			processor.Process(ctx)
 
 			if walletIndex < len(a.wallets)-1 {
-				select {
-				case <-ctx.Done():
-					logger.Warn("Задержка между кошельками пропущена (контекст отменен)")
-					return
-				default:
-				}
 				delayDuration, err := utils.RandomDuration(a.cfg.Delay.BetweenAccounts)
 				if err != nil {
-					logger.Error("Ошибка получения времени задержки между кошельками", "err", err)
+					logger.Error("Ошибка получения времени задержки между кошельками", "err", err, "wIdx", walletIndex, "addr", currentWallet.Address.Hex())
 				} else {
-					logger.Info("Пауза перед следующим кошельком", "duration", delayDuration)
-					time.Sleep(delayDuration)
+					logger.Info("Пауза перед следующим кошельком", "duration", delayDuration, "wIdx", walletIndex, "addr", currentWallet.Address.Hex())
+					select {
+					case <-time.After(delayDuration):
+					case <-ctx.Done():
+						logger.Warn("Задержка между кошельками прервана (контекст отменен)", "wIdx", walletIndex, "addr", currentWallet.Address.Hex())
+						return
+					}
 				}
 			}
-		}(processor, i)
+		}(w, i)
 	}
 
 	logger.Info("Все горутины обработки кошельков запущены.")
