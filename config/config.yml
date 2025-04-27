@@ -4,16 +4,16 @@ rpc_nodes:
   arbitrum: ["https://arbitrum.drpc.org"]
 
 concurrency:
-  max_parallel_wallets: 5 # Пример, можем изменить
+  max_parallel_wallets: 2 # Пример, можем изменить
 
 wallets: # Настройки обработки кошельков
   process_order: "random" # Порядок обработки кошельков ("sequential" или "random")
 
 delay: # задержки
   between_accounts: # задержка между обработкой РАЗНЫХ аккаунтов
-    min: 20
-    max: 35
-    unit: "minutes"
+    min: 10
+    max: 15
+    unit: "seconds"
   between_actions: # задержка между РАЗНЫМИ задачами для ОДНОГО аккаунта
     min: 30
     max: 120
@@ -31,8 +31,8 @@ delay: # задержки
 
 actions: # Настройки выполнения действий
   actions_per_account: # Количество случайных задач для выполнения на одном аккаунте за запуск
-    min: 3
-    max: 7
+    min: 1
+    max: 1
   task_order: "random" # Порядок выполнения выбранных задач ("sequential" или "random")
 
 tasks:
@@ -46,3 +46,12 @@ tasks:
     network: "any" # Сеть не важна для этой задачи
     enabled: true
     params: {}
+
+# Application State Persistence
+state:
+  # Enable resuming from the last successfully completed wallet state.
+  # If true, processing will start from the wallet AFTER the last one recorded as fully completed.
+  # IMPORTANT: When resuming is enabled, the 'process_order' for wallets is IGNORED,
+  # and processing always continues sequentially from the last known point.
+  # State saving/resuming requires a database connection (Postgres or SQLite).
+  resume_enabled: true # Default: false

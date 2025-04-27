@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"time"
 
 	"retro/internal/logger"
@@ -37,63 +38,45 @@ type EVMClient interface {
 
 // Client wraps the go-ethereum client and provides helper methods.
 type Client struct {
-	ethClient *ethclient.Client
-	chainID   *big.Int
+	*ethclient.Client
+	chainID *big.Int
+	log     logger.Logger
 }
 
 // Ensure Client implements EVMClient interface at compile time.
 var _ EVMClient = (*Client)(nil)
 
 // NewClient creates a new EVM client, trying multiple RPC URLs if provided.
-func NewClient(ctx context.Context, rpcUrls []string) (*Client, error) {
+func NewClient(ctx context.Context, log logger.Logger, rpcUrls []string) (*Client, error) {
 	if len(rpcUrls) == 0 {
 		return nil, ErrNoRpcUrlsProvided
 	}
 
-	logger.Info("Подключение к EVM узлу...", "rpc_count", len(rpcUrls))
-	var lastErr error
+	rpcUrl := rpcUrls[rand.Intn(len(rpcUrls))]
+	log.Debug("Подключение к EVM ноде...", "url", rpcUrl)
 
-	for i, url := range rpcUrls {
-		logger.Debug("Попытка подключения", "rpc_url", url, "attempt", i+1)
-
-		dialCtx, dialCancel := context.WithTimeout(ctx, 10*time.Second)
-		client, err := ethclient.DialContext(dialCtx, url)
-		dialCancel()
-		if err == nil {
-			chainCtx, chainCancel := context.WithTimeout(ctx, 5*time.Second)
-			chainID, err := client.ChainID(chainCtx)
-			chainCancel()
-			if err == nil {
-				logger.Success("Подключено к EVM узлу", "url", url, "chain_id", chainID.String())
-				return &Client{ethClient: client, chainID: chainID}, nil
-			}
-			logger.Warn("Подключено, но не удалось получить ChainID", "url", url, "error", err)
-			client.Close()
-			lastErr = err
-		} else {
-			logger.Warn("Не удалось подключиться к EVM узлу", "url", url, "error", err)
-			lastErr = err
-			if errors.Is(err, context.DeadlineExceeded) && errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				logger.Warn("Отмена операции подключения из-за таймаута родительского контекста")
-				return nil, ctx.Err()
-			}
-			if errors.Is(err, context.Canceled) && errors.Is(ctx.Err(), context.Canceled) {
-				logger.Warn("Отмена операции подключения из-за отмены родительского контекста")
-				return nil, ctx.Err()
-			}
-		}
+	ethClient, err := ethclient.DialContext(ctx, rpcUrl)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrEvmClientCreationFailed, err)
 	}
+	log.Debug("Успешное подключение к EVM ноде", "url", rpcUrl)
 
-	logger.Error("Не удалось подключиться ни к одному из указанных EVM узлов", "last_error", lastErr)
-	return nil, fmt.Errorf("%w: %w", ErrEvmClientCreationFailed, lastErr)
+	chainCtx, chainCancel := context.WithTimeout(ctx, 5*time.Second)
+	chainID, err := ethClient.ChainID(chainCtx)
+	chainCancel()
+	if err == nil {
+		log.Success("Подключено к EVM узлу", "url", rpcUrl, "chain_id", chainID.String())
+		return &Client{Client: ethClient, chainID: chainID, log: log}, nil
+	}
+	log.Warn("Подключено, но не удалось получить ChainID", "url", rpcUrl, "error", err)
+	ethClient.Close()
+	return nil, fmt.Errorf("%w: %w", ErrEvmClientCreationFailed, err)
 }
 
 // Close terminates the underlying RPC connection
 func (c *Client) Close() {
-	if c.ethClient != nil {
-		logger.Debug("Закрытие соединения с EVM клиентом")
-		c.ethClient.Close()
-	}
+	c.log.Debug("Закрытие соединения с EVM нодой...")
+	c.Client.Close()
 }
 
 // GetChainID returns the chain ID associated with the client connection
@@ -103,52 +86,57 @@ func (c *Client) GetChainID() *big.Int {
 
 // GetBalance retrieves the native token balance for a given address
 func (c *Client) GetBalance(ctx context.Context, address common.Address) (*big.Int, error) {
-	return c.ethClient.BalanceAt(ctx, address, nil)
+	c.log.Debug("Запрос баланса...", "address", address.Hex())
+	balance, err := c.Client.BalanceAt(ctx, address, nil)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка получения баланса для %s: %w", address.Hex(), err)
+	}
+	return balance, nil
 }
 
 // GetNonce retrieves the next nonce for an account
 func (c *Client) GetNonce(ctx context.Context, address common.Address) (uint64, error) {
-	return c.ethClient.PendingNonceAt(ctx, address)
+	return c.Client.PendingNonceAt(ctx, address)
 }
 
 // SuggestGasPrice suggests a gas price for legacy transactions
 func (c *Client) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
-	return c.ethClient.SuggestGasPrice(ctx)
+	return c.Client.SuggestGasPrice(ctx)
 }
 
 // SuggestGasTipCap suggests a gas tip cap for EIP-1559 transactions
 func (c *Client) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
-	return c.ethClient.SuggestGasTipCap(ctx)
+	return c.Client.SuggestGasTipCap(ctx)
 }
 
 // EstimateGasLimit estimates the gas needed for a transaction
 func (c *Client) EstimateGasLimit(ctx context.Context, msg ethereum.CallMsg) (uint64, error) {
-	return c.ethClient.EstimateGas(ctx, msg)
+	return c.Client.EstimateGas(ctx, msg)
 }
 
 // SendRawTransaction sends a signed transaction to the network
 func (c *Client) SendRawTransaction(ctx context.Context, tx *types.Transaction) error {
-	logger.Debug("Отправка подписанной транзакции", "tx_hash", tx.Hash().Hex())
-	err := c.ethClient.SendTransaction(ctx, tx)
+	c.log.Debug("Отправка подписанной транзакции", "tx_hash", tx.Hash().Hex())
+	err := c.Client.SendTransaction(ctx, tx)
 	if err != nil {
-		logger.Error("Не удалось отправить транзакцию", "tx_hash", tx.Hash().Hex(), "error", err)
+		c.log.Error("Не удалось отправить транзакцию", "tx_hash", tx.Hash().Hex(), "error", err)
 		return fmt.Errorf("sending transaction failed: %w", err)
 	}
-	logger.Info("Транзакция успешно отправлена", "tx_hash", tx.Hash().Hex())
+	c.log.Info("Транзакция успешно отправлена", "tx_hash", tx.Hash().Hex())
 	return nil
 }
 
 // WaitForReceipt waits for a transaction receipt, polling the network
 func (c *Client) WaitForReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
-	logger.Debug("Ожидание квитанции транзакции", "tx_hash", txHash.Hex())
+	c.log.Debug("Ожидание квитанции транзакции", "tx_hash", txHash.Hex())
 	for {
-		receipt, err := c.ethClient.TransactionReceipt(ctx, txHash)
+		receipt, err := c.Client.TransactionReceipt(ctx, txHash)
 		if err == nil && receipt != nil {
-			logger.Info("Квитанция транзакции получена", "tx_hash", txHash.Hex(), "status", receipt.Status)
+			c.log.Info("Квитанция транзакции получена", "tx_hash", txHash.Hex(), "status", receipt.Status)
 			return receipt, nil
 		}
 		if err != nil && !errors.Is(err, ethereum.NotFound) {
-			logger.Warn("Ошибка при проверке квитанции транзакции", "tx_hash", txHash.Hex(), "error", err)
+			c.log.Warn("Ошибка при проверке квитанции транзакции", "tx_hash", txHash.Hex(), "error", err)
 			return nil, fmt.Errorf("error fetching receipt: %w", err)
 		}
 
@@ -156,7 +144,7 @@ func (c *Client) WaitForReceipt(ctx context.Context, txHash common.Hash) (*types
 		case <-time.After(5 * time.Second):
 			continue
 		case <-ctx.Done():
-			logger.Warn("Контекст отменен во время ожидания квитанции", "tx_hash", txHash.Hex())
+			c.log.Warn("Контекст отменен во время ожидания квитанции", "tx_hash", txHash.Hex())
 			return nil, ctx.Err()
 		}
 	}

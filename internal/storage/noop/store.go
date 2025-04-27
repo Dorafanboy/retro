@@ -10,8 +10,13 @@ import (
 // Useful when database logging is disabled.
 type noOpStorage struct{}
 
-// NewStore creates a new no-operation storage logger.
-func NewStore() storage.TransactionLogger {
+// Compile-time checks to ensure noOpStorage implements both interfaces.
+var _ storage.TransactionLogger = (*noOpStorage)(nil)
+var _ storage.StateStorage = (*noOpStorage)(nil)
+
+// NewStore creates a new no-operation storage instance.
+// It now returns the concrete type which implements both interfaces.
+func NewStore() *noOpStorage {
 	return &noOpStorage{}
 }
 
@@ -25,4 +30,14 @@ func (s *noOpStorage) LogTransaction(ctx context.Context, record storage.Transac
 func (s *noOpStorage) Close() error {
 	// No operation
 	return nil
+}
+
+// GetState always returns ErrStateNotFound for the NoOp store.
+func (s *noOpStorage) GetState(ctx context.Context, key string) (string, error) {
+	return "", storage.ErrStateNotFound
+}
+
+// SetState does nothing for the NoOp store.
+func (s *noOpStorage) SetState(ctx context.Context, key, value string) error {
+	return nil // No operation, always successful
 }

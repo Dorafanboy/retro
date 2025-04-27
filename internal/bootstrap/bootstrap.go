@@ -18,25 +18,24 @@ var allTaskConstructors = map[types.TaskName]tasks.TaskConstructor{
 	// Добавлять сюда новые задачи
 }
 
-// RegisterTasksFromConfig выполняет явную регистрацию задач на основе config.yml.
-// Регистрируются только те задачи, которые включены (Enabled: true) в конфиге
-// и для которых есть запись в карте allTaskConstructors.
-func RegisterTasksFromConfig(cfg *config.Config) {
-	logger.Info("Регистрация задач из конфигурации...")
+// RegisterTasksFromConfig registers task constructors found in the config and the local map
+// into the central task registry.
+func RegisterTasksFromConfig(cfg *config.Config, log logger.Logger) {
+	log.Info("Регистрация задач из конфигурации в центральном реестре...")
 	registeredCount := 0
 	for _, taskCfg := range cfg.Tasks {
 		if taskCfg.Enabled {
-			// taskCfg.Name уже имеет тип types.TaskName после изменений в config.go
-			constructor, ok := allTaskConstructors[taskCfg.Name]
+			constructor, ok := allTaskConstructors[taskCfg.Name] // Получаем конструктор
 			if ok {
-				// Регистрируем, используя имя из конфига (типа types.TaskName)
+				log.Debug("Регистрация конструктора в центральном реестре", "task", taskCfg.Name)
+				// Регистрируем конструктор в центральном реестре
 				tasks.MustRegisterConstructor(taskCfg.Name, constructor)
-				registeredCount++
+				registeredCount++ // Считаем успешно зарегистрированные
 			} else {
-				// Имя задачи в логе уже будет types.TaskName
-				logger.Warn("Задача из config.yml включена, но не найдена среди известных конструкторов", "task", taskCfg.Name)
+				log.Warn("Задача из config.yml включена, но не найдена среди известных конструкторов в bootstrap", "task", taskCfg.Name)
 			}
 		}
 	}
-	logger.Info("Задачи, зарегистрированные для выполнения", "count", registeredCount, "tasks", tasks.ListTasks())
+	// Логируем список задач, которые теперь действительно доступны через tasks.NewTask
+	log.Info("Задачи, зарегистрированные и доступные для выполнения", "count", registeredCount, "tasks", tasks.ListTasks())
 }

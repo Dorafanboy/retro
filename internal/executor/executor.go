@@ -16,13 +16,15 @@ import (
 // Переименовано в Executor и сделано публичным
 type Executor struct {
 	cfg *config.Config
+	log logger.Logger
 }
 
 // NewExecutor creates a new Executor instance.
 // Переименовано в NewExecutor и сделано публичным
-func NewExecutor(cfg *config.Config) *Executor {
+func NewExecutor(cfg *config.Config, log logger.Logger) *Executor {
 	return &Executor{
 		cfg: cfg,
+		log: log,
 	}
 }
 
@@ -44,7 +46,7 @@ func (e *Executor) ExecuteTaskWithRetries(
 	}
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		logger.Debug(
+		e.log.Debug(
 			"Попытка выполнения задачи",
 			"task", taskEntry.Name,
 			"attempt", attempt,
@@ -52,13 +54,13 @@ func (e *Executor) ExecuteTaskWithRetries(
 		taskErr = runner.Run(ctx, wallet, client, taskEntry.Params)
 		if taskErr == nil {
 			success = true
-			logger.SuccessWithBlankLine("Задача успешно выполнена",
+			e.log.SuccessWithBlankLine("Задача успешно выполнена",
 				"task", taskEntry.Name,
 				"attempt", attempt,
 				"wallet", wallet.Address.Hex())
 			break
 		}
-		logger.Warn("Ошибка выполнения задачи, попытка повтора",
+		e.log.Warn("Ошибка выполнения задачи, попытка повтора",
 			"task", taskEntry.Name,
 			"attempt", attempt,
 			"maxAttempts", maxAttempts,
@@ -69,18 +71,18 @@ func (e *Executor) ExecuteTaskWithRetries(
 			// Используем e.cfg вместо te.cfg
 			retryDelayDuration, delayErr := utils.RandomDuration(e.cfg.Delay.BetweenRetries.Delay)
 			if delayErr != nil {
-				logger.Error("Ошибка получения времени задержки между попытками",
+				e.log.Error("Ошибка получения времени задержки между попытками",
 					"err", delayErr,
 					"wallet", wallet.Address.Hex())
 			} else {
-				logger.Info("Пауза перед следующей попыткой",
+				e.log.Info("Пауза перед следующей попыткой",
 					"duration", retryDelayDuration,
 					"wallet", wallet.Address.Hex())
 				select {
 				case <-time.After(retryDelayDuration):
 					// Пауза завершена, продолжаем ретрай
 				case <-ctx.Done():
-					logger.Warn("Задержка между попытками прервана (контекст отменен)",
+					e.log.Warn("Задержка между попытками прервана (контекст отменен)",
 						"task", taskEntry.Name,
 						"wallet", wallet.Address.Hex())
 					return taskErr // Возвращаем последнюю ошибку
@@ -90,7 +92,7 @@ func (e *Executor) ExecuteTaskWithRetries(
 	}
 
 	if !success {
-		logger.ErrorWithBlankLine("Задача не выполнена после всех попыток",
+		e.log.ErrorWithBlankLine("Задача не выполнена после всех попыток",
 			"task", taskEntry.Name,
 			"err", taskErr,
 			"wallet", wallet.Address.Hex())
@@ -98,11 +100,11 @@ func (e *Executor) ExecuteTaskWithRetries(
 		if e.cfg.Delay.AfterError.Min > 0 || e.cfg.Delay.AfterError.Max > 0 {
 			afterErrorDelay, delayErr := utils.RandomDuration(e.cfg.Delay.AfterError)
 			if delayErr != nil {
-				logger.Error("Ошибка получения времени задержки после ошибки",
+				e.log.Error("Ошибка получения времени задержки после ошибки",
 					"err", delayErr,
 					"wallet", wallet.Address.Hex())
 			} else {
-				logger.Info("Пауза после ошибки задачи",
+				e.log.Info("Пауза после ошибки задачи",
 					"duration", afterErrorDelay,
 					"wallet", wallet.Address.Hex())
 				// !! ВАЖНО: Здесь остался time.Sleep. Заменяем на select
@@ -110,7 +112,7 @@ func (e *Executor) ExecuteTaskWithRetries(
 				case <-time.After(afterErrorDelay):
 					// Пауза завершена
 				case <-ctx.Done():
-					logger.Warn("Задержка после ошибки прервана (контекст отменен)",
+					e.log.Warn("Задержка после ошибки прервана (контекст отменен)",
 						"task", taskEntry.Name,
 						"wallet", wallet.Address.Hex())
 					// Возвращаем ошибку, так как задача уже не удалась

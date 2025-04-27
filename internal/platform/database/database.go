@@ -22,37 +22,42 @@ var (
 	ErrMissingConnectionString = errors.New("database connection string is missing")
 )
 
-// NewTransactionLogger создает экземпляр TransactionLogger на основе переданных параметров.
-func NewTransactionLogger(ctx context.Context, dbType types.DBType, connStr, maxConnsStr string) (storage.TransactionLogger, error) {
+// NewStorage initializes and returns the configured storage implementation(s).
+// It returns both a TransactionLogger and a StateStorage.
+// If dbType is "none", both returned interfaces will be non-nil (noop implementations).
+func NewStorage(ctx context.Context, log logger.Logger, dbType types.DBType, connStr string, poolMaxConnsStr string) (storage.TransactionLogger, storage.StateStorage, error) {
 	var txLogger storage.TransactionLogger
+	var stateStorage storage.StateStorage
 	var err error
 
 	switch dbType {
 	case types.Postgres:
 		if connStr == "" {
-			return nil, fmt.Errorf("для PostgreSQL: %w", ErrMissingConnectionString)
+			return nil, nil, fmt.Errorf("для PostgreSQL: %w", ErrMissingConnectionString)
 		}
-		logger.Info("Инициализация логгера транзакций PostgreSQL...")
-		txLogger, err = postgres.NewStore(ctx, connStr, maxConnsStr)
+		log.Info("Инициализация хранилища PostgreSQL...")
+		txLogger, stateStorage, err = postgres.NewStore(ctx, log, connStr, poolMaxConnsStr)
 		if err != nil {
-			return nil, fmt.Errorf("ошибка подключения к PostgreSQL: %w: %w", ErrDBConnectionFailed, err)
+			return nil, nil, fmt.Errorf("ошибка подключения к PostgreSQL: %w: %w", ErrDBConnectionFailed, err)
 		}
 	case types.SQLite:
 		if connStr == "" {
-			return nil, fmt.Errorf("для SQLite: %w", ErrMissingConnectionString)
+			return nil, nil, fmt.Errorf("для SQLite: %w", ErrMissingConnectionString)
 		}
-		logger.Info("Инициализация логгера транзакций SQLite...")
-		txLogger, err = sqlite.NewStore(ctx, connStr)
+		log.Info("Инициализация хранилища SQLite...")
+		txLogger, stateStorage, err = sqlite.NewStore(ctx, log, connStr)
 		if err != nil {
-			return nil, fmt.Errorf("ошибка подключения к SQLite: %w: %w", ErrDBConnectionFailed, err)
+			return nil, nil, fmt.Errorf("ошибка подключения к SQLite: %w: %w", ErrDBConnectionFailed, err)
 		}
 	case types.None, "":
-		logger.Info("Логгирование транзакций в БД отключено.")
-		txLogger = noop.NewStore()
+		log.Info("Логгирование транзакций и сохранение состояния в БД отключены.")
+		noopStore := noop.NewStore()
+		txLogger = noopStore
+		stateStorage = noopStore
 	default:
-		return nil, fmt.Errorf("%w: %s (ожидается '%s', '%s' или '%s')",
+		return nil, nil, fmt.Errorf("%w: %s (ожидается '%s', '%s' или '%s')",
 			ErrUnsupportedDBType, dbType, types.Postgres, types.SQLite, types.None)
 	}
 
-	return txLogger, nil
+	return txLogger, stateStorage, nil
 }

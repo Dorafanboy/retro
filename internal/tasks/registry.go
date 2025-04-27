@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"retro/internal/logger"
 	"retro/internal/types"
 )
 
@@ -15,8 +16,9 @@ var (
 	ErrTaskConstructorNotFound = errors.New("task constructor not found in registry")
 )
 
-// TaskConstructor defines the function signature for creating a TaskRunner instance.
-type TaskConstructor func() TaskRunner
+// TaskConstructor defines the function signature for creating task runners.
+// It now accepts a logger instance.
+type TaskConstructor func(log logger.Logger) TaskRunner
 
 // registry stores registered TaskConstructor functions by name (using types.TaskName as key).
 var (
@@ -24,28 +26,31 @@ var (
 	constructorsMux sync.RWMutex // Mutex to protect concurrent access to the constructors map
 )
 
-// MustRegisterConstructor adds a TaskConstructor to the registry using types.TaskName.
-// It panics if a constructor with the same name is already registered.
+// MustRegisterConstructor registers a task constructor or panics if the name is already registered.
+// The constructor must now conform to the TaskConstructor type, accepting a logger.
 func MustRegisterConstructor(name types.TaskName, constructor TaskConstructor) {
 	constructorsMux.Lock()
 	defer constructorsMux.Unlock()
 
 	if _, exists := constructors[name]; exists {
-		panic(fmt.Sprintf("task constructor with name '%s' already registered", name))
+		panic(fmt.Sprintf("task constructor already registered: %s", name))
 	}
 	constructors[name] = constructor
 }
 
-// NewTask creates a new TaskRunner instance using the registered constructor for the given types.TaskName.
-func NewTask(name types.TaskName) (TaskRunner, error) {
+// NewTask creates a new task runner instance by its name.
+// It now requires a logger to pass to the task constructor.
+// It returns an error if the task name is not registered.
+func NewTask(name types.TaskName, log logger.Logger) (TaskRunner, error) {
 	constructorsMux.RLock()
-	constructor, exists := constructors[name]
-	constructorsMux.RUnlock() // Unlock after reading
+	defer constructorsMux.RUnlock()
 
+	constructor, exists := constructors[name]
 	if !exists {
-		return nil, fmt.Errorf("task constructor for '%s' not found: %w", name, ErrTaskConstructorNotFound)
+		return nil, fmt.Errorf("unknown task name: %s", name)
 	}
-	return constructor(), nil // Call the constructor to get a new instance
+	// Передаем логгер конструктору
+	return constructor(log), nil
 }
 
 // ListTasks returns a list of registered task constructor names (types.TaskName).

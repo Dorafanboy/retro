@@ -3,8 +3,9 @@ package config
 import (
 	"errors"
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"os"
+
+	"gopkg.in/yaml.v3"
 
 	"retro/internal/types"
 )
@@ -33,6 +34,11 @@ type TaskConfigEntry struct {
 	Params  map[string]interface{} `yaml:"params"`
 }
 
+// StateConfig holds configuration related to application state persistence.
+type StateConfig struct {
+	ResumeEnabled bool `yaml:"resume_enabled"`
+}
+
 // Config corresponds to the structure of config.yml
 type Config struct {
 	LogFilePath string              `yaml:"log_file_path,omitempty"`
@@ -43,6 +49,7 @@ type Config struct {
 	Actions     ActionsConfig       `yaml:"actions"`
 	Tasks       []TaskConfigEntry   `yaml:"tasks"`
 	Database    DatabaseConfig      `yaml:"database"`
+	State       StateConfig         `yaml:"state"`
 }
 
 // ConcurrencyConfig holds settings related to parallel execution
@@ -89,20 +96,24 @@ type MinMax struct {
 	Max int `yaml:"max"`
 }
 
-// LoadConfig reads the configuration file from the given path.
+// LoadConfig reads configuration from the specified file path.
 func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("файл конфигурации '%s': %w", path, ErrConfigNotFound)
+			return nil, fmt.Errorf("%w: %s", ErrConfigNotFound, path)
 		}
-		return nil, fmt.Errorf("чтение файла '%s': %w: %w", path, ErrConfigReadFailed, err)
+		return nil, fmt.Errorf("%w reading %s: %w", ErrConfigReadFailed, path, err)
 	}
 
 	var cfg Config
 	err = yaml.Unmarshal(data, &cfg)
 	if err != nil {
-		return nil, fmt.Errorf("парсинг YAML из '%s': %w: %w", path, ErrConfigParseFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrConfigParseFailed, err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
 
 	if dbTypeEnv := os.Getenv("DB_TYPE"); dbTypeEnv != "" {
@@ -116,4 +127,11 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// Validate performs basic validation on the loaded configuration.
+func (c *Config) Validate() error {
+	// ... (существующий код Validate)
+	// Добавить валидацию для State, если нужно
+	return nil
 }

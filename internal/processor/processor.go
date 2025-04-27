@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"retro/internal/config"
@@ -23,97 +24,112 @@ import (
 // Processor encapsulates the logic for processing a single wallet.
 // Переименовано в Processor и сделано публичным
 type Processor struct {
-	cfg          *config.Config
-	wallet       *wallet.Wallet
-	walletIndex  int
-	taskSelector *selector.Selector // Используем тип из нового пакета
-	taskExecutor *executor.Executor // Используем тип из нового пакета
-	txLogger     storage.TransactionLogger
+	cfg              *config.Config
+	wallet           *wallet.Wallet
+	walletIndex      int
+	currentWalletNum int
+	totalWalletsNum  int
+	taskSelector     *selector.Selector
+	taskExecutor     *executor.Executor
+	txLogger         storage.TransactionLogger
+	log              logger.Logger
 }
 
 // NewProcessor creates a new Processor instance.
 // Переименовано в NewProcessor и сделано публичным
-func NewProcessor(cfg *config.Config, w *wallet.Wallet, index int, txLogger storage.TransactionLogger) *Processor {
-	taskSelector := selector.NewSelector(cfg) // Используем конструктор из нового пакета
-	taskExecutor := executor.NewExecutor(cfg) // Используем конструктор из нового пакета
+func NewProcessor(cfg *config.Config, w *wallet.Wallet, originalIndex int, currentNum int, totalNum int, txLogger storage.TransactionLogger, log logger.Logger) *Processor {
+	taskSelector := selector.NewSelector(cfg, log)
+	taskExecutor := executor.NewExecutor(cfg, log)
 
 	return &Processor{
-		cfg:          cfg,
-		wallet:       w,
-		walletIndex:  index,
-		taskSelector: taskSelector,
-		taskExecutor: taskExecutor,
-		txLogger:     txLogger,
+		cfg:              cfg,
+		wallet:           w,
+		walletIndex:      originalIndex,
+		currentWalletNum: currentNum,
+		totalWalletsNum:  totalNum,
+		taskSelector:     taskSelector,
+		taskExecutor:     taskExecutor,
+		txLogger:         txLogger,
+		log:              log,
 	}
 }
 
 // Process processes one wallet: selects tasks, executes them with retries and delays.
-// Метод сделан публичным
-func (p *Processor) Process(ctx context.Context) {
-	logger.InfoWithBlankLine("-------------------- Начало обработки кошелька --------------------",
-		"wIdx", p.walletIndex+1,
+// It returns an error if the processing was explicitly stopped (e.g., context canceled)
+// or if any task ultimately failed after retries. Returns nil on successful completion of all tasks.
+func (p *Processor) Process(ctx context.Context) error {
+	walletProgress := fmt.Sprintf("%d/%d", p.currentWalletNum, p.totalWalletsNum)
+	p.log.InfoWithBlankLine("-------------------- Начало обработки кошелька --------------------",
+		"wallet", walletProgress,
+		"origIdx", p.walletIndex,
 		"addr", p.wallet.Address.Hex())
 
-	// Используем taskSelector из структуры
 	selectedTasks, err := p.taskSelector.SelectTasks()
 	if err != nil {
 		// Используем ошибку из пакета selector
 		if errors.Is(err, selector.ErrNoValidTasksSelected) {
-			logger.Warn("Для кошелька не выбрано ни одной задачи, пропускаем",
-				"wIdx", p.walletIndex+1,
+			p.log.Warn("Для кошелька не выбрано ни одной задачи, пропускаем",
+				"wallet", walletProgress,
 				"addr", p.wallet.Address.Hex())
 		} else {
-			logger.Error("Ошибка выбора задач для кошелька, пропускаем",
+			p.log.Error("Ошибка выбора задач для кошелька, пропускаем",
 				"err", err,
-				"wIdx", p.walletIndex+1,
+				"wallet", walletProgress,
 				"addr", p.wallet.Address.Hex())
 		}
-		return
+		return err
 	}
 
-	logger.Info("Задачи для выполнения",
-		"count", len(selectedTasks),
+	totalTasks := len(selectedTasks)
+	p.log.Info("Задачи для выполнения",
+		"count", totalTasks,
 		"order", p.cfg.Actions.TaskOrder,
-		"wIdx", p.walletIndex+1,
+		"wallet", walletProgress,
 		"addr", p.wallet.Address.Hex())
 
+	var finalError error
+
 	for taskIndex, taskEntry := range selectedTasks {
+		taskProgress := fmt.Sprintf("%d/%d", taskIndex+1, totalTasks)
 		select {
 		case <-ctx.Done():
-			logger.Warn("Обработка прервана (контекст отменен перед задачей)",
+			p.log.Warn("Обработка прервана (контекст отменен перед задачей)",
 				"task", taskEntry.Name,
-				"wIdx", p.walletIndex+1,
+				"taskNum", taskProgress,
+				"wallet", walletProgress,
 				"addr", p.wallet.Address.Hex())
-			return
+			return ctx.Err()
 		default:
 		}
 
-		logger.InfoWithBlankLine("------ Начало задачи ------",
-			"taskIdx", taskIndex+1,
+		p.log.InfoWithBlankLine("------ Начало задачи ------",
+			"taskNum", taskProgress,
 			"task", taskEntry.Name,
 			"net", taskEntry.Network,
-			"wIdx", p.walletIndex+1,
+			"wallet", walletProgress,
 			"addr", p.wallet.Address.Hex())
 
 		var client *evm.Client
 		var err error
 		var runner tasks.TaskRunner
 
-		// Создаем новый экземпляр задачи через конструктор
-		runner, err = tasks.NewTask(taskEntry.Name)
+		runner, err = tasks.NewTask(taskEntry.Name, p.log)
 		if err != nil {
 			// Проверяем, является ли ошибка ошибкой 'конструктор не найден'
 			if errors.Is(err, tasks.ErrTaskConstructorNotFound) {
-				logger.Error("Конструктор задачи не найден в реестре, пропуск",
+				p.log.Error("Конструктор задачи не найден в реестре, пропуск",
 					"task", taskEntry.Name,
-					"wIdx", p.walletIndex+1,
+					"wallet", walletProgress,
 					"addr", p.wallet.Address.Hex())
 			} else {
-				logger.Error("Не удалось создать runner задачи, пропуск",
+				p.log.Error("Не удалось создать runner задачи, пропуск",
 					"task", taskEntry.Name,
 					"err", err,
-					"wIdx", p.walletIndex+1,
+					"wallet", walletProgress,
 					"addr", p.wallet.Address.Hex())
+			}
+			if finalError == nil {
+				finalError = err
 			}
 			continue
 		}
@@ -121,60 +137,68 @@ func (p *Processor) Process(ctx context.Context) {
 		if taskEntry.Network != "any" {
 			rpcUrls, ok := p.cfg.RPCNodes[taskEntry.Network]
 			if !ok || len(rpcUrls) == 0 {
-				logger.Error("Не найдены RPC URL для сети, пропуск задачи",
+				p.log.Error("Не найдены RPC URL для сети, пропуск задачи",
 					"task", taskEntry.Name,
 					"net", taskEntry.Network,
-					"wIdx", p.walletIndex+1,
+					"wallet", walletProgress,
 					"addr", p.wallet.Address.Hex())
 				continue
 			}
 
-			logger.Debug("Создание EVM клиента",
+			p.log.Debug("Создание EVM клиента",
 				"net", taskEntry.Network,
-				"wIdx", p.walletIndex+1,
+				"wallet", walletProgress,
 				"addr", p.wallet.Address.Hex())
-			client, err = evm.NewClient(ctx, rpcUrls)
+			client, err = evm.NewClient(ctx, p.log, rpcUrls)
 			if err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					logger.Warn("Создание EVM клиента прервано (контекст)",
+					p.log.Warn("Создание EVM клиента прервано (контекст)",
 						"task", taskEntry.Name,
 						"err", err,
-						"wIdx", p.walletIndex+1,
+						"wallet", walletProgress,
 						"addr", p.wallet.Address.Hex())
-					return
+					return err
 				} else if errors.Is(err, evm.ErrEvmClientCreationFailed) || errors.Is(err, evm.ErrNoRpcUrlsProvided) {
-					logger.Error("Не удалось создать EVM клиент (нет RPC/ошибка), пропуск",
+					p.log.Error("Не удалось создать EVM клиент (нет RPC/ошибка), пропуск",
 						"task", taskEntry.Name,
 						"net", taskEntry.Network,
 						"err", err,
-						"wIdx", p.walletIndex+1,
+						"wallet", walletProgress,
 						"addr", p.wallet.Address.Hex())
 				} else {
-					logger.Error("Непредвиденная ошибка при создании EVM клиента, пропуск",
+					p.log.Error("Непредвиденная ошибка при создании EVM клиента, пропуск",
 						"task", taskEntry.Name,
 						"net", taskEntry.Network,
 						"err", err,
-						"wIdx", p.walletIndex+1,
+						"wallet", walletProgress,
 						"addr", p.wallet.Address.Hex())
+				}
+				if finalError == nil {
+					finalError = err
 				}
 				continue
 			}
+
+			// Отложенное закрытие клиента *после* успешного создания
+			defer func() {
+				if client != nil {
+					client.Close()
+				}
+			}()
 		} else {
-			logger.Debug("Пропуск создания EVM клиента для задачи с сетью 'any'",
+			p.log.Debug("Пропуск создания EVM клиента для задачи с сетью 'any'",
 				"task", taskEntry.Name,
-				"wIdx", p.walletIndex+1)
+				"wallet", walletProgress)
 		}
 
-		// Используем taskExecutor из структуры
 		executionErr := p.taskExecutor.ExecuteTaskWithRetries(ctx, p.wallet, client, taskEntry, runner)
 
 		// Формируем и логируем запись о транзакции/задаче
 		record := storage.TransactionRecord{
 			Timestamp:     time.Now(),
 			WalletAddress: p.wallet.Address.Hex(),
-			TaskName:      taskEntry.Name, // Тип types.TaskName совпадает с storage.TransactionRecord
+			TaskName:      taskEntry.Name,
 			Network:       taskEntry.Network,
-			// TxHash:      "", // Пока не получаем хэш от задач
 		}
 		if executionErr != nil {
 			record.Status = types.TxStatusFailed
@@ -183,58 +207,62 @@ func (p *Processor) Process(ctx context.Context) {
 			record.Status = types.TxStatusSuccess
 		}
 
-		// Используем txLogger из структуры
 		if logErr := p.txLogger.LogTransaction(ctx, record); logErr != nil {
-			logger.Error("Не удалось записать лог транзакции в БД",
+			p.log.Error("Не удалось записать лог транзакции в БД",
 				"task", taskEntry.Name,
 				"err", logErr,
-				"wIdx", p.walletIndex+1,
+				"wallet", walletProgress,
 				"addr", p.wallet.Address.Hex())
 		}
 
-		if client != nil {
-			// defer client.Close() // Перенесено
+		if executionErr != nil {
+			if finalError == nil {
+				finalError = executionErr
+			}
 		}
-		logger.InfoWithBlankLine("------ Конец задачи ------",
+		p.log.InfoWithBlankLine("------ Конец задачи ------",
+			"taskNum", taskProgress,
 			"task", taskEntry.Name,
-			"wIdx", p.walletIndex+1,
+			"wallet", walletProgress,
+			"status", record.Status,
 			"addr", p.wallet.Address.Hex())
 
-		if taskIndex < len(selectedTasks)-1 {
+		if taskIndex < totalTasks-1 {
 			select {
 			case <-ctx.Done():
-				logger.Warn("Обработка прервана (контекст отменен перед задержкой)",
-					"wIdx", p.walletIndex+1,
+				p.log.Warn("Обработка прервана (контекст отменен перед задержкой между задачами)",
+					"wallet", walletProgress,
 					"addr", p.wallet.Address.Hex())
-				return
+				return ctx.Err()
 			default:
 			}
 			actionDelayDuration, delayErr := utils.RandomDuration(p.cfg.Delay.BetweenActions)
 			if delayErr != nil {
-				logger.Error("Ошибка получения времени задержки между задачами",
+				p.log.Error("Ошибка получения времени задержки между задачами",
 					"err", delayErr,
-					"wIdx", p.walletIndex+1,
+					"wallet", walletProgress,
 					"addr", p.wallet.Address.Hex())
 			} else {
-				logger.Info("Пауза перед следующей задачей",
+				p.log.Info("Пауза перед следующей задачей",
 					"duration", actionDelayDuration,
-					"wIdx", p.walletIndex+1,
+					"wallet", walletProgress,
 					"addr", p.wallet.Address.Hex())
-				// Заменяем time.Sleep на select с проверкой контекста
 				select {
 				case <-time.After(actionDelayDuration):
-					// Пауза завершена
 				case <-ctx.Done():
-					logger.Warn("Задержка между задачами прервана (контекст отменен)",
-						"wIdx", p.walletIndex+1,
+					p.log.Warn("Задержка между задачами прервана (контекст отменен)",
+						"wallet", walletProgress,
 						"addr", p.wallet.Address.Hex())
-					return // Выходим из Process для этого кошелька
+					return ctx.Err()
 				}
 			}
 		}
 	}
 
-	logger.InfoWithBlankLine("-------------------- Конец обработки кошелька ---------------------",
-		"wIdx", p.walletIndex+1,
-		"addr", p.wallet.Address.Hex())
+	p.log.InfoWithBlankLine("-------------------- Конец обработки кошелька ---------------------",
+		"wallet", walletProgress,
+		"addr", p.wallet.Address.Hex(),
+		"status", map[bool]string{finalError == nil: "Success", finalError != nil: "Failed"}[true])
+
+	return finalError
 }
