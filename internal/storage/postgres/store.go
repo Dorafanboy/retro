@@ -22,7 +22,7 @@ type store struct {
 const createTxTableSQL = `
 CREATE TABLE IF NOT EXISTS transactions (
     id SERIAL PRIMARY KEY,
-    timestamp TIMESTAMPTZ NOT NULL,
+    timestamp TIMESTAMP NOT NULL,
     wallet_address VARCHAR(42) NOT NULL,
     task_name VARCHAR(255) NOT NULL,
     network VARCHAR(255) NOT NULL,

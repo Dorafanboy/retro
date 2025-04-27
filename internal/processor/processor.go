@@ -195,25 +195,28 @@ func (p *Processor) Process(ctx context.Context) error {
 
 		// Формируем и логируем запись о транзакции/задаче
 		record := storage.TransactionRecord{
-			Timestamp:     time.Now(),
+			Timestamp:     time.Now().Truncate(time.Second),
 			WalletAddress: p.wallet.Address.Hex(),
 			TaskName:      taskEntry.Name,
 			Network:       taskEntry.Network,
 		}
 		if executionErr != nil {
-			record.Status = types.TxStatusFailed
+			record.Status = (types.TxStatusFailed)
 			record.Error = executionErr.Error()
 		} else {
-			record.Status = types.TxStatusSuccess
+			record.Status = (types.TxStatusSuccess)
 		}
 
-		if logErr := p.txLogger.LogTransaction(ctx, record); logErr != nil {
-			p.log.Error("Не удалось записать лог транзакции в БД",
+		// Используем новый контекст для записи лога, чтобы не прерываться отменой основного ctx
+		logTxCtx, logTxCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if logDbErr := p.txLogger.LogTransaction(logTxCtx, record); logDbErr != nil {
+			p.log.Error("Не удалось записать лог транзакции в БД (возможно, не связано с отменой основного ctx)",
 				"task", taskEntry.Name,
-				"err", logErr,
+				"err", logDbErr,
 				"wallet", walletProgress,
 				"addr", p.wallet.Address.Hex())
 		}
+		logTxCancel()
 
 		if executionErr != nil {
 			if finalError == nil {
