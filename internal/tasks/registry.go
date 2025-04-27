@@ -4,52 +4,57 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+
+	"retro/internal/types"
 )
 
 var (
-	// ErrTaskAlreadyRegistered indicates that a task with the same name is already registered.
-	ErrTaskAlreadyRegistered = errors.New("task already registered")
-	// ErrTaskNotFound indicates that a task with the given name was not found in the registry.
-	ErrTaskNotFound = errors.New("task not found in registry")
+	// ErrTaskConstructorAlreadyRegistered indicates that a task constructor with the same name is already registered.
+	ErrTaskConstructorAlreadyRegistered = errors.New("task constructor already registered")
+	// ErrTaskConstructorNotFound indicates that a task constructor with the given name was not found in the registry.
+	ErrTaskConstructorNotFound = errors.New("task constructor not found in registry")
 )
 
-// registry stores registered TaskRunner implementations by name.
+// TaskConstructor defines the function signature for creating a TaskRunner instance.
+type TaskConstructor func() TaskRunner
+
+// registry stores registered TaskConstructor functions by name (using types.TaskName as key).
 var (
-	registry = make(map[string]TaskRunner)
-	regMux   sync.RWMutex // Mutex to protect concurrent access to the registry
+	constructors    = make(map[types.TaskName]TaskConstructor)
+	constructorsMux sync.RWMutex // Mutex to protect concurrent access to the constructors map
 )
 
-// RegisterTask adds a TaskRunner to the registry.
-func RegisterTask(name string, runner TaskRunner) error {
-	regMux.Lock()
-	defer regMux.Unlock()
+// MustRegisterConstructor adds a TaskConstructor to the registry using types.TaskName.
+// It panics if a constructor with the same name is already registered.
+func MustRegisterConstructor(name types.TaskName, constructor TaskConstructor) {
+	constructorsMux.Lock()
+	defer constructorsMux.Unlock()
 
-	if _, exists := registry[name]; exists {
-		return fmt.Errorf("%w: %s", ErrTaskAlreadyRegistered, name)
+	if _, exists := constructors[name]; exists {
+		panic(fmt.Sprintf("task constructor with name '%s' already registered", name))
 	}
-	registry[name] = runner
-	return nil
+	constructors[name] = constructor
 }
 
-// GetTask retrieves a TaskRunner from the registry by name.
-func GetTask(name string) (TaskRunner, error) {
-	regMux.RLock()
-	defer regMux.RUnlock()
+// NewTask creates a new TaskRunner instance using the registered constructor for the given types.TaskName.
+func NewTask(name types.TaskName) (TaskRunner, error) {
+	constructorsMux.RLock()
+	constructor, exists := constructors[name]
+	constructorsMux.RUnlock() // Unlock after reading
 
-	runner, exists := registry[name]
 	if !exists {
-		return nil, fmt.Errorf("task '%s': %w", name, ErrTaskNotFound)
+		return nil, fmt.Errorf("task constructor for '%s' not found: %w", name, ErrTaskConstructorNotFound)
 	}
-	return runner, nil
+	return constructor(), nil // Call the constructor to get a new instance
 }
 
-// ListTasks returns a list of registered task names.
-func ListTasks() []string {
-	regMux.RLock()
-	defer regMux.RUnlock()
+// ListTasks returns a list of registered task constructor names (types.TaskName).
+func ListTasks() []types.TaskName {
+	constructorsMux.RLock()
+	defer constructorsMux.RUnlock()
 
-	names := make([]string, 0, len(registry))
-	for name := range registry {
+	names := make([]types.TaskName, 0, len(constructors))
+	for name := range constructors {
 		names = append(names, name)
 	}
 	return names

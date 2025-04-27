@@ -12,16 +12,13 @@ import (
 	"time"
 
 	"retro/internal/app"
+	"retro/internal/bootstrap"
 	"retro/internal/config"
 	"retro/internal/logger"
 	"retro/internal/platform/database"
-	"retro/internal/tasks"
 	"retro/internal/wallet"
 
 	"github.com/joho/godotenv"
-
-	_ "retro/internal/tasks"
-	_ "retro/internal/tasks/dummy"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -92,10 +89,10 @@ func main() {
 	}
 	logger.Info("Кошельки успешно загружены", "count", len(wallets))
 
-	registeredTasks := tasks.ListTasks()
-	logger.Info("Зарегистрированные задачи", "tasks", registeredTasks)
+	// Явная регистрация задач перенесена в bootstrap
+	bootstrap.RegisterTasksFromConfig(cfg)
 
-	appInstance := app.NewApplication(cfg, wallets, registeredTasks, &wg)
+	appInstance := app.NewApplication(cfg, wallets, &wg, txLogger)
 
 	appInstance.Run(ctx)
 

@@ -1,6 +1,7 @@
-package app
+package selector
 
 import (
+	"errors"
 	"math/rand"
 	"sort"
 
@@ -10,40 +11,38 @@ import (
 	"retro/internal/utils"
 )
 
-// TaskSelector is responsible for the logic of selecting tasks to execute.
-type TaskSelector struct {
-	cfg                 *config.Config
-	registeredTaskNames []string
+// ErrNoValidTasksSelected сигнализирует, что не было выбрано ни одной валидной задачи.
+var ErrNoValidTasksSelected = errors.New("selector: no valid and active tasks selected")
+
+// Selector is responsible for the logic of selecting tasks to execute.
+type Selector struct {
+	cfg *config.Config
 }
 
-// newTaskSelector creates a new TaskSelector instance.
-func newTaskSelector(cfg *config.Config, registeredTaskNames []string) *TaskSelector {
-	return &TaskSelector{
-		cfg:                 cfg,
-		registeredTaskNames: registeredTaskNames,
+// NewSelector creates a new Selector instance.
+func NewSelector(cfg *config.Config) *Selector {
+	return &Selector{
+		cfg: cfg,
 	}
 }
 
 // SelectTasks selects tasks to run based on configuration.
-func (ts *TaskSelector) SelectTasks() ([]config.TaskConfigEntry, error) {
-	if len(ts.cfg.Actions.ExplicitTaskSequence) > 0 {
+func (s *Selector) SelectTasks() ([]config.TaskConfigEntry, error) {
+	if len(s.cfg.Actions.ExplicitTaskSequence) > 0 {
 		logger.Debug("Используется режим явной последовательности задач")
 		var selected []config.TaskConfigEntry
-		taskMap := make(map[string]config.TaskConfigEntry)
-		for _, taskCfg := range ts.cfg.Tasks {
+		taskMap := make(map[types.TaskName]config.TaskConfigEntry)
+		for _, taskCfg := range s.cfg.Tasks {
 			if taskCfg.Enabled {
 				taskMap[taskCfg.Name] = taskCfg
 			}
 		}
 
-		for _, taskName := range ts.cfg.Actions.ExplicitTaskSequence {
+		for _, taskNameStr := range s.cfg.Actions.ExplicitTaskSequence {
+			taskName := types.TaskName(taskNameStr)
 			taskCfg, exists := taskMap[taskName]
 			if !exists {
 				logger.Warn("Задача из явной последовательности не найдена/отключена", "task", taskName)
-				continue
-			}
-			if !isTaskRegistered(taskName, ts.registeredTaskNames) {
-				logger.Warn("Задача из явной последовательности не зарегистрирована", "task", taskName)
 				continue
 			}
 			selected = append(selected, taskCfg)
@@ -58,8 +57,8 @@ func (ts *TaskSelector) SelectTasks() ([]config.TaskConfigEntry, error) {
 	logger.Debug("Используется режим случайного выбора задач")
 
 	availableTasks := make([]config.TaskConfigEntry, 0)
-	for _, taskCfg := range ts.cfg.Tasks {
-		if taskCfg.Enabled && isTaskRegistered(taskCfg.Name, ts.registeredTaskNames) {
+	for _, taskCfg := range s.cfg.Tasks {
+		if taskCfg.Enabled {
 			availableTasks = append(availableTasks, taskCfg)
 		}
 	}
@@ -68,8 +67,8 @@ func (ts *TaskSelector) SelectTasks() ([]config.TaskConfigEntry, error) {
 		return nil, ErrNoValidTasksSelected
 	}
 
-	minTasks := ts.cfg.Actions.ActionsPerAccount.Min
-	maxTasks := ts.cfg.Actions.ActionsPerAccount.Max
+	minTasks := s.cfg.Actions.ActionsPerAccount.Min
+	maxTasks := s.cfg.Actions.ActionsPerAccount.Max
 	if maxTasks <= 0 || maxTasks > len(availableTasks) {
 		maxTasks = len(availableTasks)
 	}
@@ -88,10 +87,10 @@ func (ts *TaskSelector) SelectTasks() ([]config.TaskConfigEntry, error) {
 
 	selected := availableTasks[:numTasksToSelect]
 
-	if ts.cfg.Actions.TaskOrder == types.TaskOrderSequential {
+	if s.cfg.Actions.TaskOrder == types.TaskOrderSequential {
 		logger.Debug("Сортировка выбранных задач по порядку из конфига")
-		originalIndex := make(map[string]int)
-		for idx, taskCfg := range ts.cfg.Tasks {
+		originalIndex := make(map[types.TaskName]int)
+		for idx, taskCfg := range s.cfg.Tasks {
 			originalIndex[taskCfg.Name] = idx
 		}
 		sort.SliceStable(selected, func(i, j int) bool {
@@ -104,21 +103,11 @@ func (ts *TaskSelector) SelectTasks() ([]config.TaskConfigEntry, error) {
 	return selected, nil
 }
 
-// isTaskRegistered checks if the task name is in the list of registered ones.
-func isTaskRegistered(name string, registeredNames []string) bool {
-	for _, registeredName := range registeredNames {
-		if name == registeredName {
-			return true
-		}
-	}
-	return false
-}
-
 // getTaskNames - helper for logging task names.
 func getTaskNames(tasks []config.TaskConfigEntry) []string {
 	names := make([]string, len(tasks))
 	for i, task := range tasks {
-		names[i] = task.Name
+		names[i] = string(task.Name)
 	}
 	return names
 }

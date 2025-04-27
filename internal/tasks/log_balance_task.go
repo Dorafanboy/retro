@@ -34,11 +34,7 @@ func (t *LogBalanceTask) Run(ctx context.Context, w *wallet.Wallet, client evm.E
 	return nil
 }
 
-// init registers the task when the package is imported.
-func init() {
-	err := RegisterTask("log_balance", &LogBalanceTask{})
-	if err != nil {
-		// Using panic here because registration failure during init is critical
-		panic(fmt.Sprintf("Failed to register task log_balance: %v", err))
-	}
+// NewLogBalanceTask creates a new instance of LogBalanceTask.
+func NewLogBalanceTask() TaskRunner {
+	return &LogBalanceTask{}
 }

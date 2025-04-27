@@ -1,4 +1,4 @@
-package app
+package executor
 
 import (
 	"context"
@@ -12,20 +12,23 @@ import (
 	"retro/internal/wallet"
 )
 
-// TaskExecutor is responsible for executing a single task with retrace logic.
-type TaskExecutor struct {
+// Executor is responsible for executing a single task with retries logic.
+// Переименовано в Executor и сделано публичным
+type Executor struct {
 	cfg *config.Config
 }
 
-// newTaskExecutor creates a new TaskExecutor instance.
-func newTaskExecutor(cfg *config.Config) *TaskExecutor {
-	return &TaskExecutor{
+// NewExecutor creates a new Executor instance.
+// Переименовано в NewExecutor и сделано публичным
+func NewExecutor(cfg *config.Config) *Executor {
+	return &Executor{
 		cfg: cfg,
 	}
 }
 
 // ExecuteTaskWithRetries executes a single task with retries logic.
-func (te *TaskExecutor) ExecuteTaskWithRetries(
+// Метод сделан публичным
+func (e *Executor) ExecuteTaskWithRetries(
 	ctx context.Context,
 	wallet *wallet.Wallet,
 	client evm.EVMClient,
@@ -34,7 +37,8 @@ func (te *TaskExecutor) ExecuteTaskWithRetries(
 ) error {
 	var taskErr error
 	success := false
-	maxAttempts := te.cfg.Delay.BetweenRetries.Attempts
+	// Используем e.cfg вместо te.cfg
+	maxAttempts := e.cfg.Delay.BetweenRetries.Attempts
 	if maxAttempts <= 0 {
 		maxAttempts = 1
 	}
@@ -62,7 +66,8 @@ func (te *TaskExecutor) ExecuteTaskWithRetries(
 			"wallet", wallet.Address.Hex())
 
 		if attempt < maxAttempts {
-			retryDelayDuration, delayErr := utils.RandomDuration(te.cfg.Delay.BetweenRetries.Delay)
+			// Используем e.cfg вместо te.cfg
+			retryDelayDuration, delayErr := utils.RandomDuration(e.cfg.Delay.BetweenRetries.Delay)
 			if delayErr != nil {
 				logger.Error("Ошибка получения времени задержки между попытками",
 					"err", delayErr,
@@ -71,7 +76,15 @@ func (te *TaskExecutor) ExecuteTaskWithRetries(
 				logger.Info("Пауза перед следующей попыткой",
 					"duration", retryDelayDuration,
 					"wallet", wallet.Address.Hex())
-				time.Sleep(retryDelayDuration)
+				select {
+				case <-time.After(retryDelayDuration):
+					// Пауза завершена, продолжаем ретрай
+				case <-ctx.Done():
+					logger.Warn("Задержка между попытками прервана (контекст отменен)",
+						"task", taskEntry.Name,
+						"wallet", wallet.Address.Hex())
+					return taskErr // Возвращаем последнюю ошибку
+				}
 			}
 		}
 	}
@@ -81,8 +94,9 @@ func (te *TaskExecutor) ExecuteTaskWithRetries(
 			"task", taskEntry.Name,
 			"err", taskErr,
 			"wallet", wallet.Address.Hex())
-		if te.cfg.Delay.AfterError.Min > 0 || te.cfg.Delay.AfterError.Max > 0 {
-			afterErrorDelay, delayErr := utils.RandomDuration(te.cfg.Delay.AfterError)
+		// Используем e.cfg вместо te.cfg
+		if e.cfg.Delay.AfterError.Min > 0 || e.cfg.Delay.AfterError.Max > 0 {
+			afterErrorDelay, delayErr := utils.RandomDuration(e.cfg.Delay.AfterError)
 			if delayErr != nil {
 				logger.Error("Ошибка получения времени задержки после ошибки",
 					"err", delayErr,
@@ -91,7 +105,17 @@ func (te *TaskExecutor) ExecuteTaskWithRetries(
 				logger.Info("Пауза после ошибки задачи",
 					"duration", afterErrorDelay,
 					"wallet", wallet.Address.Hex())
-				time.Sleep(afterErrorDelay)
+				// !! ВАЖНО: Здесь остался time.Sleep. Заменяем на select
+				select {
+				case <-time.After(afterErrorDelay):
+					// Пауза завершена
+				case <-ctx.Done():
+					logger.Warn("Задержка после ошибки прервана (контекст отменен)",
+						"task", taskEntry.Name,
+						"wallet", wallet.Address.Hex())
+					// Возвращаем ошибку, так как задача уже не удалась
+					return taskErr
+				}
 			}
 		}
 	}

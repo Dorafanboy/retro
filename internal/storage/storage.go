@@ -11,7 +11,7 @@ import (
 type TransactionRecord struct {
 	Timestamp     time.Time      `json:"timestamp"`
 	WalletAddress string         `json:"wallet_address"`
-	TaskName      string         `json:"task_name"`
+	TaskName      types.TaskName `json:"task_name"`
 	Network       string         `json:"network"`
 	TxHash        string         `json:"tx_hash,omitempty"` // Can be empty on pre-send errors
 	Status        types.TxStatus `json:"status"`            // Use the custom TxStatus type

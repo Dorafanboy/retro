@@ -22,12 +22,6 @@ func NewTask() tasks.TaskRunner {
 	return &DummyTask{}
 }
 
-// init регистрирует задачу при загрузке пакета.
-func init() {
-	logger.Debug("Registering dummy_task...")
-	tasks.RegisterTask("dummy_task", NewTask())
-}
-
 // Run выполняет логику задачи-заглушки.
 func (dt *DummyTask) Run(ctx context.Context, w *wallet.Wallet, client evm.EVMClient, params map[string]interface{}) error {
 	logger.Info("Начало выполнения задачи-заглушки (DummyTask)", "wallet", w.Address.Hex())

@@ -8,6 +8,7 @@ import (
 
 	"retro/internal/config"
 	"retro/internal/logger"
+	"retro/internal/processor"
 	"retro/internal/storage"
 	"retro/internal/types"
 	"retro/internal/utils"
@@ -16,15 +17,14 @@ import (
 
 // Application holds the core application logic and dependencies.
 type Application struct {
-	cfg                 *config.Config
-	wallets             []*wallet.Wallet
-	registeredTaskNames []string
-	wg                  *sync.WaitGroup
-	txLogger            storage.TransactionLogger
+	cfg      *config.Config
+	wallets  []*wallet.Wallet
+	wg       *sync.WaitGroup
+	txLogger storage.TransactionLogger
 }
 
 // NewApplication creates a new Application instance.
-func NewApplication(cfg *config.Config, wallets []*wallet.Wallet, registeredTaskNames []string, wg *sync.WaitGroup, txLogger storage.TransactionLogger) *Application {
+func NewApplication(cfg *config.Config, wallets []*wallet.Wallet, wg *sync.WaitGroup, txLogger storage.TransactionLogger) *Application {
 	if cfg.Wallets.ProcessOrder == types.OrderRandom {
 		logger.Info("Перемешивание порядка кошельков...")
 		rand.Shuffle(len(wallets), func(i, j int) {
@@ -32,11 +32,10 @@ func NewApplication(cfg *config.Config, wallets []*wallet.Wallet, registeredTask
 		})
 	}
 	return &Application{
-		cfg:                 cfg,
-		wallets:             wallets,
-		registeredTaskNames: registeredTaskNames,
-		wg:                  wg,
-		txLogger:            txLogger,
+		cfg:      cfg,
+		wallets:  wallets,
+		wg:       wg,
+		txLogger: txLogger,
 	}
 }
 
@@ -56,8 +55,8 @@ func (a *Application) Run(ctx context.Context) {
 			default:
 			}
 
-			processor := newWalletProcessor(a.cfg, currentWallet, walletIndex, a.registeredTaskNames, a.txLogger)
-			processor.Process(ctx)
+			proc := processor.NewProcessor(a.cfg, currentWallet, walletIndex, a.txLogger)
+			proc.Process(ctx)
 
 			if walletIndex < len(a.wallets)-1 {
 				delayDuration, err := utils.RandomDuration(a.cfg.Delay.BetweenAccounts)

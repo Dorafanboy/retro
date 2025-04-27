@@ -3,11 +3,10 @@ package config
 import (
 	"errors"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"os"
 
 	"retro/internal/types"
-
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -28,7 +27,7 @@ type DatabaseConfig struct {
 
 // TaskConfigEntry defines the structure for a single task entry in the config.
 type TaskConfigEntry struct {
-	Name    string                 `yaml:"name"`
+	Name    types.TaskName         `yaml:"name"`
 	Network string                 `yaml:"network"`
 	Enabled bool                   `yaml:"enabled"`
 	Params  map[string]interface{} `yaml:"params"`
