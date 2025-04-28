@@ -32,6 +32,7 @@ type EVMClient interface {
 	EstimateGasLimit(ctx context.Context, msg ethereum.CallMsg) (uint64, error)
 	SendRawTransaction(ctx context.Context, tx *types.Transaction) error
 	WaitForReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
+	SimulateCall(ctx context.Context, msg ethereum.CallMsg) ([]byte, error)
 }
 
 // Client wraps the go-ethereum client and provides helper methods.
@@ -146,4 +147,25 @@ func (c *Client) WaitForReceipt(ctx context.Context, txHash common.Hash) (*types
 			return nil, ctx.Err()
 		}
 	}
+}
+
+// SimulateCall performs a read-only contract call (eth_call).
+func (c *Client) SimulateCall(ctx context.Context, msg ethereum.CallMsg) ([]byte, error) {
+	toAddr := "nil"
+	if msg.To != nil {
+		toAddr = msg.To.Hex()
+	}
+	fromAddr := "nil"
+	if msg.From != (common.Address{}) {
+		fromAddr = msg.From.Hex()
+	}
+
+	c.log.Debug("Симуляция вызова контракта (eth_call)...", "to", toAddr, "from", fromAddr, "data_len", len(msg.Data))
+	result, err := c.Client.CallContract(ctx, msg, nil) // nil block number defaults to latest
+	if err != nil {
+		c.log.Error("Ошибка симуляции вызова контракта", "to", toAddr, "error", err)
+		return nil, fmt.Errorf("ошибка eth_call: %w", err)
+	}
+	c.log.Debug("Симуляция вызова контракта успешно завершена", "result_len", len(result))
+	return result, nil
 }
