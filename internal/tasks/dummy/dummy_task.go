@@ -8,7 +8,7 @@ import (
 	"retro/internal/logger"
 	"retro/internal/tasks"
 	"retro/internal/utils"
-	"retro/internal/wallet"
+	// "retro/internal/wallet" // No longer needed
 )
 
 // DummyTask - это простая задача-заглушка для тестирования.
@@ -25,18 +25,19 @@ func NewTask(log logger.Logger) tasks.TaskRunner {
 }
 
 // Run выполняет логику задачи-заглушки.
-func (dt *DummyTask) Run(ctx context.Context, w *wallet.Wallet, client evm.EVMClient, params map[string]interface{}) error {
-	dt.log.Info("Начало выполнения задачи-заглушки (DummyTask)", "wallet", w.Address.Hex())
+func (dt *DummyTask) Run(ctx context.Context, signer *evm.Signer, client evm.EVMClient, params map[string]interface{}) error {
+	walletAddress := signer.Address()
+	dt.log.Info("Начало выполнения задачи-заглушки (DummyTask)", "wallet", walletAddress.Hex())
 
 	// Имитация работы
 	delay := time.Duration(utils.RandomIntInRange(1, 3)) * time.Second
-	dt.log.Debug("DummyTask: имитация работы...", "delay", delay, "wallet", w.Address.Hex())
+	dt.log.Debug("DummyTask: имитация работы...", "delay", delay, "wallet", walletAddress.Hex())
 	time.Sleep(delay)
 
 	// Можно добавить сюда логику для генерации фейкового хэша транзакции,
 	// если логгер транзакций ожидает его для записи в БД.
 	// txHash := common.HexToHash(fmt.Sprintf("0x%x", time.Now().UnixNano()))
 
-	dt.log.Success("Задача-заглушка (DummyTask) успешно завершена", "wallet", w.Address.Hex())
+	dt.log.Success("Задача-заглушка (DummyTask) успешно завершена", "wallet", walletAddress.Hex())
 	return nil // Возвращаем nil, имитируя успешное выполнение
 }

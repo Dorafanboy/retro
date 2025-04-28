@@ -15,9 +15,9 @@ import (
 	"retro/internal/app"
 	"retro/internal/bootstrap"
 	"retro/internal/config"
+	"retro/internal/keyloader"
 	"retro/internal/logger"
 	"retro/internal/platform/database"
-	"retro/internal/wallet"
 
 	"github.com/joho/godotenv"
 
@@ -81,24 +81,24 @@ func main() {
 		}
 	}
 
-	colorLogger.Info("Загрузка кошельков...", "path", *walletsPath)
-	wallets, err := wallet.LoadWallets(*walletsPath, colorLogger)
+	colorLogger.Info("Загрузка приватных ключей...", "path", *walletsPath)
+	loadedKeys, err := keyloader.LoadKeys(*walletsPath, colorLogger)
 	if err != nil {
-		if errors.Is(err, wallet.ErrWalletsFileNotFound) {
-			colorLogger.Fatal("Файл кошельков не найден", "path", *walletsPath, "error", err)
-		} else if errors.Is(err, wallet.ErrNoValidKeysFound) {
-			colorLogger.Fatal("В файле кошельков не найдено валидных ключей",
+		if errors.Is(err, keyloader.ErrWalletsFileNotFound) {
+			colorLogger.Fatal("Файл ключей не найден", "path", *walletsPath, "error", err)
+		} else if errors.Is(err, keyloader.ErrNoValidKeysFound) {
+			colorLogger.Fatal("В файле ключей не найдено валидных ключей",
 				"path", *walletsPath, "error", err)
 		} else {
-			colorLogger.Fatal("Не удалось прочитать файл кошельков",
+			colorLogger.Fatal("Не удалось прочитать файл ключей",
 				"path", *walletsPath, "error", err)
 		}
 	}
-	colorLogger.Info("Кошельки успешно загружены", "count", len(wallets))
+	colorLogger.Info("Ключи успешно загружены", "count", len(loadedKeys))
 
 	bootstrap.RegisterTasksFromConfig(cfg, colorLogger)
 
-	appInstance := app.NewApplication(cfg, wallets, &wg, txLogger, stateStorage, colorLogger)
+	appInstance := app.NewApplication(cfg, loadedKeys, &wg, txLogger, stateStorage, colorLogger)
 
 	go gracefulShutdown(cancel, colorLogger, txLogger, stateStorage)
 

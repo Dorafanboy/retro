@@ -1,4 +1,4 @@
-package wallet
+package keyloader
 
 import (
 	"bufio"
@@ -15,31 +15,34 @@ import (
 )
 
 var (
-	ErrWalletsFileNotFound       = errors.New("wallets file not found")
-	ErrWalletFileReadFailed      = errors.New("failed to read wallets file")
+	ErrWalletsFileNotFound       = errors.New("key file not found")
+	ErrWalletFileReadFailed      = errors.New("failed to read key file")
 	ErrWalletInvalidKey          = errors.New("invalid private key format")
 	ErrPublicKeyExtractionFailed = errors.New("failed to extract public key")
 	ErrNoValidKeysFound          = errors.New("no valid private keys found in the file")
 )
 
-// Wallet stores the private key and address
-type Wallet struct {
+// LoadedKey stores the private key and address loaded from a source.
+// It does not provide any signing capabilities itself.
+type LoadedKey struct {
 	PrivateKey *ecdsa.PrivateKey
 	Address    common.Address
 }
 
-// LoadWallets reads private keys from a file and returns a slice of Wallet pointers.
-func LoadWallets(path string, log logger.Logger) ([]*Wallet, error) {
+// LoadKeys reads private keys from a file and returns a slice of LoadedKey pointers.
+// It expects one private key per line, optionally prefixed with "0x".
+// Lines starting with '#' or empty lines are ignored.
+func LoadKeys(path string, log logger.Logger) ([]*LoadedKey, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("файл кошельков '%s': %w", path, ErrWalletsFileNotFound)
+			return nil, fmt.Errorf("файл ключей '%s': %w", path, ErrWalletsFileNotFound)
 		}
-		return nil, fmt.Errorf("чтение файла кошельков '%s': %w: %w", path, ErrWalletFileReadFailed, err)
+		return nil, fmt.Errorf("чтение файла ключей '%s': %w: %w", path, ErrWalletFileReadFailed, err)
 	}
 	defer file.Close()
 
-	var wallets []*Wallet
+	var loadedKeys []*LoadedKey
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
 	for scanner.Scan() {
@@ -51,26 +54,27 @@ func LoadWallets(path string, log logger.Logger) ([]*Wallet, error) {
 
 		privateKeyHex := strings.TrimPrefix(line, "0x")
 
-		wallet, _ := parsePrivateKey(privateKeyHex, lineNumber, path, log)
-		if wallet != nil {
-			wallets = append(wallets, wallet)
+		keyData, _ := parsePrivateKeyToLoadedKey(privateKeyHex, lineNumber, path, log)
+		if keyData != nil {
+			loadedKeys = append(loadedKeys, keyData)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("сканирование файла кошельков '%s': %w: %w", path, ErrWalletFileReadFailed, err)
+		return nil, fmt.Errorf("сканирование файла ключей '%s': %w: %w", path, ErrWalletFileReadFailed, err)
 	}
 
-	if len(wallets) == 0 {
+	if len(loadedKeys) == 0 {
 		log.Error("В файле не найдено валидных приватных ключей", "file", path)
 		return nil, fmt.Errorf("%w в файле '%s'", ErrNoValidKeysFound, path)
 	}
 
-	return wallets, nil
+	return loadedKeys, nil
 }
 
-// parsePrivateKey converts a hex private key string into a Wallet struct.
-func parsePrivateKey(privateKeyHex string, lineNumber int, filePath string, log logger.Logger) (*Wallet, error) {
+// parsePrivateKeyToLoadedKey converts a hex private key string into a LoadedKey struct.
+// Returns nil if the key is invalid or public key extraction fails, logging a warning.
+func parsePrivateKeyToLoadedKey(privateKeyHex string, lineNumber int, filePath string, log logger.Logger) (*LoadedKey, error) {
 	privateKey, err := crypto.HexToECDSA(privateKeyHex)
 	if err != nil {
 		log.Warn("Неверный формат приватного ключа",
@@ -87,7 +91,7 @@ func parsePrivateKey(privateKeyHex string, lineNumber int, filePath string, log 
 	}
 
 	address := crypto.PubkeyToAddress(*publicKeyECDSA)
-	return &Wallet{
+	return &LoadedKey{
 		PrivateKey: privateKey,
 		Address:    address,
 	}, nil
