@@ -17,9 +17,7 @@ import (
 )
 
 var (
-	// ErrNoRpcUrlsProvided indicates that no RPC URLs were provided for client creation.
-	ErrNoRpcUrlsProvided = errors.New("no RPC URLs provided")
-	// ErrEvmClientCreationFailed indicates that the client failed to connect to any of the provided RPC URLs.
+	ErrNoRpcUrlsProvided       = errors.New("no RPC URLs provided")
 	ErrEvmClientCreationFailed = errors.New("failed to connect to any provided EVM node")
 )
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"retro/internal/logger"
 	"retro/internal/storage"
@@ -19,76 +18,27 @@ type store struct {
 	log  logger.Logger
 }
 
-const createTxTableSQL = `
-CREATE TABLE IF NOT EXISTS transactions (
-    id SERIAL PRIMARY KEY,
-    timestamp TIMESTAMP NOT NULL,
-    wallet_address VARCHAR(42) NOT NULL,
-    task_name VARCHAR(255) NOT NULL,
-    network VARCHAR(255) NOT NULL,
-    tx_hash VARCHAR(66),
-    status VARCHAR(50) NOT NULL,
-    error_message TEXT
-);`
+// NewStore initializes the database schema (tables) on an existing connection pool.
+func NewStore(
+	pool *pgxpool.Pool, // Expect a ready pool
+	log logger.Logger,
+) (storage.TransactionLogger, storage.StateStorage, error) {
+	ctx := context.Background()
 
-const createStateTableSQL = `
-CREATE TABLE IF NOT EXISTS application_state (
-	key TEXT PRIMARY KEY,
-	value TEXT NOT NULL
-);`
-
-// NewStore creates a new PostgreSQL transaction logger and state storage.
-func NewStore(ctx context.Context, log logger.Logger, connectionString string, maxConnsStr string) (storage.TransactionLogger, storage.StateStorage, error) {
-	config, err := pgxpool.ParseConfig(connectionString)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to parse connection string: %w", err)
-	}
-
-	if maxConnsStr != "" {
-		maxConns, err := strconv.Atoi(maxConnsStr)
-		if err != nil {
-			log.Warn("Invalid DB_POOL_MAX_CONNS value, using default", "value", maxConnsStr, "error", err)
-		} else if maxConns > 0 {
-			config.MaxConns = int32(maxConns)
-			log.Info("Setting max DB connections", "count", config.MaxConns)
-		}
-	}
-
-	pool, err := pgxpool.NewWithConfig(ctx, config)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to create connection pool: %w", err)
-	}
-
-	// Defer closing the pool if initialization fails after this point
-	defer func() {
-		if err != nil && pool != nil {
-			pool.Close()
-		}
-	}()
-
-	err = pool.Ping(ctx)
-	if err != nil {
-		// pool is closed by defer
-		return nil, nil, fmt.Errorf("unable to ping database: %w", err)
-	}
-
-	// Create transactions table if it doesn't exist
-	if _, err = pool.Exec(ctx, createTxTableSQL); err != nil {
-		// pool is closed by defer
+	log.Info("Initializing PostgreSQL schema (tables)...", "database", pool.Config().ConnConfig.Database)
+	if _, err := pool.Exec(ctx, storage.CreateTxTableSQL); err != nil {
 		return nil, nil, fmt.Errorf("failed to create transactions table: %w", err)
 	}
 	log.Info("Table 'transactions' initialized successfully (or already existed).")
 
-	// Create application_state table if it doesn't exist
-	if _, err = pool.Exec(ctx, createStateTableSQL); err != nil {
-		// pool is closed by defer
+	if _, err := pool.Exec(ctx, storage.CreateStateTableSQL); err != nil {
 		return nil, nil, fmt.Errorf("failed to create application_state table: %w", err)
 	}
 	log.Info("Table 'application_state' initialized successfully (or already existed).")
 
-	log.Success("Successfully connected to PostgreSQL.")
+	log.Success("PostgreSQL schema initialized.")
 	s := &store{pool: pool, log: log}
-	return s, s, nil // Return store instance for both interfaces
+	return s, s, nil
 }
 
 // LogTransaction saves a transaction record to the 'transactions' table.
@@ -107,10 +57,15 @@ func (s *store) LogTransaction(ctx context.Context, record storage.TransactionRe
 	)
 
 	if err != nil {
-		s.log.Error("Failed to insert transaction log into DB", "error", err, "wallet", record.WalletAddress, "task", record.TaskName)
+		s.log.Error("Failed to insert transaction log into DB",
+			"error", err,
+			"wallet", record.WalletAddress,
+			"task", record.TaskName)
 		return fmt.Errorf("failed to execute insert query: %w", err)
 	}
-	s.log.Debug("Transaction log saved to DB", "wallet", record.WalletAddress, "task", record.TaskName, "status", record.Status)
+	s.log.Debug("Transaction log saved to DB",
+		"wallet", record.WalletAddress, "task",
+		record.TaskName, "status", record.Status)
 	return nil
 }
 

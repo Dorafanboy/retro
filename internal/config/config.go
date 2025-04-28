@@ -11,11 +11,8 @@ import (
 )
 
 var (
-	// ErrConfigNotFound indicates that the configuration file was not found at the specified path.
-	ErrConfigNotFound = errors.New("config file not found")
-	// ErrConfigReadFailed indicates that there was an error reading the configuration file.
-	ErrConfigReadFailed = errors.New("failed to read config file")
-	// ErrConfigParseFailed indicates that the configuration file content is not valid YAML.
+	ErrConfigNotFound    = errors.New("config file not found")
+	ErrConfigReadFailed  = errors.New("failed to read config file")
 	ErrConfigParseFailed = errors.New("failed to parse config file (invalid YAML)")
 )
 

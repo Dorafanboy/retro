@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"io"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -31,98 +32,91 @@ var (
 func main() {
 	_ = godotenv.Load()
 
-	logInstance := logger.NewColorLogger()
+	colorLogger := logger.NewColorLogger()
 
 	defer func() {
 		if r := recover(); r != nil {
-			logInstance.Fatal("Критическая ошибка (panic)", "error", r)
+			colorLogger.Fatal("Критическая ошибка (panic)", "error", r)
 		}
 	}()
 
 	rand.Seed(time.Now().UnixNano())
 	flag.Parse()
 
-	logInstance.Info("Запуск Retro Template...")
+	colorLogger.Info("Запуск Retro Template...")
 
 	var wg sync.WaitGroup
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	go gracefulShutdown(cancel, logInstance)
-
-	logInstance.Info("Загрузка конфигурации...", "path", *configPath)
+	colorLogger.Info("Загрузка конфигурации...", "path", *configPath)
 	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
-		if errors.Is(err, config.ErrConfigNotFound) { // TODO: избавиться от столькоих ошибок мб просто питаь оишбку и все, подумать
-			logInstance.Fatal("Файл конфигурации не найден", "path", *configPath, "error", err)
+		if errors.Is(err, config.ErrConfigNotFound) {
+			colorLogger.Fatal("Файл конфигурации не найден", "path", *configPath, "error", err)
 		} else if errors.Is(err, config.ErrConfigParseFailed) {
-			logInstance.Fatal("Ошибка парсинга файла конфигурации (проверьте YAML синтаксис)", "path", *configPath, "error", err)
+			colorLogger.Fatal("Ошибка парсинга файла конфигурации (проверьте YAML синтаксис)",
+				"path", *configPath, "error", err)
 		} else {
-			logInstance.Fatal("Не удалось прочитать файл конфигурации", "path", *configPath, "error", err)
+			colorLogger.Fatal("Не удалось прочитать файл конфигурации",
+				"path", *configPath, "error", err)
 		}
 	}
-	logInstance.Info("Конфигурация успешно загружена", "max_parallel", cfg.Concurrency.MaxParallelWallets)
+	colorLogger.Info("Конфигурация успешно загружена", "max_parallel", cfg.Concurrency.MaxParallelWallets)
 
-	txLogger, stateStorage, err := database.NewStorage(ctx, logInstance, cfg.Database.Type, cfg.Database.ConnectionString, cfg.Database.PoolMaxConns)
+	txLogger, stateStorage, err := database.NewStorage(
+		ctx,
+		colorLogger,
+		cfg.Database.Type,
+		cfg.Database.ConnectionString,
+		cfg.Database.PoolMaxConns,
+	)
 	if err != nil {
 		if errors.Is(err, database.ErrUnsupportedDBType) || errors.Is(err, database.ErrMissingConnectionString) {
-			logInstance.Fatal("Ошибка конфигурации хранилища данных", "db_type", cfg.Database.Type, "error", err)
+			colorLogger.Fatal("Ошибка конфигурации хранилища данных",
+				"db_type", cfg.Database.Type, "error", err)
 		} else {
-			logInstance.Fatal("Не удалось инициализировать хранилище данных", "db_type", cfg.Database.Type, "error", err)
+			colorLogger.Fatal("Не удалось инициализировать хранилище данных",
+				"db_type", cfg.Database.Type, "error", err)
 		}
 	}
 
-	defer func() {
-		logInstance.Debug("Closing transaction logger...")
-		if err := txLogger.Close(); err != nil {
-			logInstance.Error("Ошибка закрытия логгера транзакций", "error", err)
-		}
-	}()
-
-	defer func() {
-		logInstance.Debug("Closing state storage...")
-		if stateStorage != nil {
-			if err := stateStorage.Close(); err != nil {
-				logInstance.Error("Ошибка закрытия хранилища состояния", "error", err)
-			}
-		}
-	}()
-
-	defer cancel()
-
-	logInstance.Info("Загрузка кошельков...", "path", *walletsPath)
-	wallets, err := wallet.LoadWallets(*walletsPath, logInstance)
+	colorLogger.Info("Загрузка кошельков...", "path", *walletsPath)
+	wallets, err := wallet.LoadWallets(*walletsPath, colorLogger)
 	if err != nil {
 		if errors.Is(err, wallet.ErrWalletsFileNotFound) {
-			logInstance.Fatal("Файл кошельков не найден", "path", *walletsPath, "error", err)
+			colorLogger.Fatal("Файл кошельков не найден", "path", *walletsPath, "error", err)
 		} else if errors.Is(err, wallet.ErrNoValidKeysFound) {
-			logInstance.Fatal("В файле кошельков не найдено валидных ключей", "path", *walletsPath, "error", err)
+			colorLogger.Fatal("В файле кошельков не найдено валидных ключей",
+				"path", *walletsPath, "error", err)
 		} else {
-			logInstance.Fatal("Не удалось прочитать файл кошельков", "path", *walletsPath, "error", err)
+			colorLogger.Fatal("Не удалось прочитать файл кошельков",
+				"path", *walletsPath, "error", err)
 		}
 	}
-	logInstance.Info("Кошельки успешно загружены", "count", len(wallets))
+	colorLogger.Info("Кошельки успешно загружены", "count", len(wallets))
 
-	bootstrap.RegisterTasksFromConfig(cfg, logInstance)
+	bootstrap.RegisterTasksFromConfig(cfg, colorLogger)
 
-	appInstance := app.NewApplication(cfg, wallets, &wg, txLogger, stateStorage, logInstance)
+	appInstance := app.NewApplication(cfg, wallets, &wg, txLogger, stateStorage, colorLogger)
+
+	go gracefulShutdown(cancel, colorLogger, txLogger, stateStorage)
 
 	appInstance.Run(ctx)
 
 	select {
 	case <-ctx.Done():
-		logInstance.Warn("Контекст был отменен.")
+		colorLogger.Warn("Контекст был отменен.")
 	default:
 	}
 
-	logInstance.Info("Retro Template ожидает завершения операций перед выходом...")
+	colorLogger.Info("Retro Template ожидает завершения операций перед выходом...")
 	wg.Wait()
-	logInstance.Info("Retro Template завершил работу.")
+	colorLogger.Info("Retro Template завершил работу.")
 }
 
-// gracefulShutdown handles termination signals.
-func gracefulShutdown(cancel context.CancelFunc, log logger.Logger) {
+// gracefulShutdown handles termination signals and cleans up resources.
+func gracefulShutdown(cancel context.CancelFunc, log logger.Logger, closers ...io.Closer) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -131,5 +125,18 @@ func gracefulShutdown(cancel context.CancelFunc, log logger.Logger) {
 	log.Warn("Инициируется плавная остановка... Отменяем контекст.")
 	cancel()
 
-	log.Info("Graceful shutdown: сигнал обработан, контекст отменен.")
+	log.Info("Graceful shutdown: закрытие ресурсов...")
+
+	for i, closer := range closers {
+		if closer != nil {
+			log.Debug("Closing resource...", "index", i+1)
+			if err := closer.Close(); err != nil {
+				log.Error("Ошибка закрытия ресурса при остановке", "index", i+1, "error", err)
+			} else {
+				log.Debug("Resource closed.", "index", i+1)
+			}
+		}
+	}
+
+	log.Info("Graceful shutdown: сигнал обработан, контекст отменен, ресурсы закрыты.")
 }

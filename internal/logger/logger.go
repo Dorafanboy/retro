@@ -206,7 +206,6 @@ func (l *ColorLogger) formatMessage(level, message string, fields ...interface{}
 }
 
 // formatField formats a single key-value field for logging.
-// Skips service and module fields as they are handled in the prefix.
 func (l *ColorLogger) formatField(key string, value interface{}) string {
 	if key == "service" || key == "module" {
 		return ""

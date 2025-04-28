@@ -15,16 +15,11 @@ import (
 )
 
 var (
-	// ErrWalletsFileNotFound indicates that the wallets file was not found.
-	ErrWalletsFileNotFound = errors.New("wallets file not found")
-	// ErrWalletFileReadFailed indicates an error occurred while reading the wallets file.
-	ErrWalletFileReadFailed = errors.New("failed to read wallets file")
-	// ErrWalletInvalidKey indicates an invalid private key format was encountered.
-	ErrWalletInvalidKey = errors.New("invalid private key format")
-	// ErrPublicKeyExtractionFailed indicates failure to extract public key from private key.
+	ErrWalletsFileNotFound       = errors.New("wallets file not found")
+	ErrWalletFileReadFailed      = errors.New("failed to read wallets file")
+	ErrWalletInvalidKey          = errors.New("invalid private key format")
 	ErrPublicKeyExtractionFailed = errors.New("failed to extract public key")
-	// ErrNoValidKeysFound indicates that no valid private keys were found in the file.
-	ErrNoValidKeysFound = errors.New("no valid private keys found in the file")
+	ErrNoValidKeysFound          = errors.New("no valid private keys found in the file")
 )
 
 // Wallet stores the private key and address
@@ -56,24 +51,10 @@ func LoadWallets(path string, log logger.Logger) ([]*Wallet, error) {
 
 		privateKeyHex := strings.TrimPrefix(line, "0x")
 
-		privateKey, err := crypto.HexToECDSA(privateKeyHex)
-		if err != nil {
-			log.Warn("Неверный формат приватного ключа", "line", lineNumber, "file", path, "error", ErrWalletInvalidKey)
-			continue
+		wallet, _ := parsePrivateKey(privateKeyHex, lineNumber, path, log)
+		if wallet != nil {
+			wallets = append(wallets, wallet)
 		}
-
-		publicKey := privateKey.Public()
-		publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
-		if !ok {
-			log.Warn("Не удалось извлечь публичный ключ ECDSA", "line", lineNumber, "file", path, "error", ErrPublicKeyExtractionFailed)
-			continue
-		}
-
-		address := crypto.PubkeyToAddress(*publicKeyECDSA)
-		wallets = append(wallets, &Wallet{
-			PrivateKey: privateKey,
-			Address:    address,
-		})
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -86,4 +67,28 @@ func LoadWallets(path string, log logger.Logger) ([]*Wallet, error) {
 	}
 
 	return wallets, nil
+}
+
+// parsePrivateKey converts a hex private key string into a Wallet struct.
+func parsePrivateKey(privateKeyHex string, lineNumber int, filePath string, log logger.Logger) (*Wallet, error) {
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	if err != nil {
+		log.Warn("Неверный формат приватного ключа",
+			"line", lineNumber, "file", filePath, "error", ErrWalletInvalidKey)
+		return nil, nil
+	}
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		log.Warn("Не удалось извлечь публичный ключ ECDSA",
+			"line", lineNumber, "file", filePath, "error", ErrPublicKeyExtractionFailed)
+		return nil, nil
+	}
+
+	address := crypto.PubkeyToAddress(*publicKeyECDSA)
+	return &Wallet{
+		PrivateKey: privateKey,
+		Address:    address,
+	}, nil
 }

@@ -9,11 +9,9 @@ import (
 )
 
 var (
-	// Precomputed powers of 10 for conversion
 	pow10_9  = big.NewInt(params.GWei)
 	pow10_18 = big.NewInt(params.Ether)
 
-	// Use big.Float for more accurate scaling
 	etherScale = new(big.Float).SetInt(pow10_18)
 	gweiScale  = new(big.Float).SetInt(pow10_9)
 )

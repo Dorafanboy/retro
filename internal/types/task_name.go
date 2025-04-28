@@ -6,5 +6,4 @@ type TaskName string
 const (
 	TaskNameLogBalance TaskName = "log_balance"
 	TaskNameDummy      TaskName = "dummy_task"
-	// Добавлять сюда новые константы задач
 )

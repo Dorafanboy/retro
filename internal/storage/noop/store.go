@@ -7,7 +7,6 @@ import (
 )
 
 // NoOpStorage is an implementation of TransactionLogger that does nothing.
-// Useful when database logging is disabled.
 type noOpStorage struct{}
 
 // Compile-time checks to ensure noOpStorage implements both interfaces.
@@ -15,7 +14,6 @@ var _ storage.TransactionLogger = (*noOpStorage)(nil)
 var _ storage.StateStorage = (*noOpStorage)(nil)
 
 // NewStore creates a new no-operation storage instance.
-// It now returns the concrete type which implements both interfaces.
 func NewStore() *noOpStorage {
 	return &noOpStorage{}
 }

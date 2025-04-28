@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"retro/internal/logger"
 	"retro/internal/storage"
@@ -20,67 +18,27 @@ type store struct {
 	log logger.Logger
 }
 
-const createTxTableSQL = `
-CREATE TABLE IF NOT EXISTS transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp DATETIME NOT NULL,
-    wallet_address TEXT NOT NULL,
-    task_name TEXT NOT NULL,
-    network TEXT NOT NULL,
-    tx_hash TEXT,
-    status TEXT NOT NULL,
-    error_message TEXT
-);`
+// NewStore initializes the database schema (tables) on an existing SQLite connection.
+func NewStore(
+	log logger.Logger,
+	db *sql.DB, // Expect a ready connection
+) (storage.TransactionLogger, storage.StateStorage, error) {
+	ctx := context.Background()
 
-const createStateTableSQL = `
-CREATE TABLE IF NOT EXISTS application_state (
-	key TEXT PRIMARY KEY,
-	value TEXT NOT NULL
-);`
-
-// NewStore creates a new SQLite transaction logger and state storage.
-func NewStore(ctx context.Context, log logger.Logger, dbPath string) (storage.TransactionLogger, storage.StateStorage, error) {
-	log.Info("Initializing SQLite database...", "path", dbPath)
-
-	dir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dir, 0750); err != nil {
-		return nil, nil, fmt.Errorf("failed to create directory for sqlite db %s: %w", dir, err)
-	}
-
-	db, err := sql.Open("sqlite3", dbPath+"?_journal=WAL&_busy_timeout=5000")
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to open sqlite database at %s: %w", dbPath, err)
-	}
-
-	// Defer closing the DB if initialization fails
-	defer func() {
-		if err != nil && db != nil {
-			db.Close()
-		}
-	}()
-
-	if err = db.PingContext(ctx); err != nil {
-		// db is closed by defer
-		return nil, nil, fmt.Errorf("failed to ping sqlite database at %s: %w", dbPath, err)
-	}
-
-	// Create transactions table
-	if _, err = db.ExecContext(ctx, createTxTableSQL); err != nil {
-		// db is closed by defer
-		return nil, nil, fmt.Errorf("failed to create transactions table: %w", err)
+	log.Info("Initializing SQLite schema (tables)...")
+	if _, err := db.ExecContext(ctx, storage.CreateTxTableSQL); err != nil {
+		return nil, nil, fmt.Errorf("failed to create transactions table in sqlite: %w", err)
 	}
 	log.Info("Table 'transactions' initialized successfully (or already existed).")
 
-	// Create application_state table
-	if _, err = db.ExecContext(ctx, createStateTableSQL); err != nil {
-		// db is closed by defer
-		return nil, nil, fmt.Errorf("failed to create application_state table: %w", err)
+	if _, err := db.ExecContext(ctx, storage.CreateStateTableSQL); err != nil {
+		return nil, nil, fmt.Errorf("failed to create application_state table in sqlite: %w", err)
 	}
 	log.Info("Table 'application_state' initialized successfully (or already existed).")
 
-	log.Success("SQLite database initialized successfully.", "path", dbPath)
+	log.Success("SQLite schema initialized.")
 	s := &store{db: db, log: log}
-	return s, s, nil // Return store instance for both interfaces
+	return s, s, nil
 }
 
 // LogTransaction saves a transaction record to the SQLite database.
