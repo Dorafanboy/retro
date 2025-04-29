@@ -41,10 +41,8 @@ func NewApplication(
 
 // Run starts the main application logic loop, processing wallets.
 func (a *Application) Run(ctx context.Context) {
-	// Получаем список кошельков для обработки
 	keysToProcess, err := a.prepareWalletsToProcess(ctx)
 	if err != nil {
-		// Handle error from prepareWalletsToProcess if it becomes fatal
 		a.log.Error("Ошибка подготовки списка ключей для обработки, завершение работы.", "error", err)
 		return
 	}
@@ -54,7 +52,6 @@ func (a *Application) Run(ctx context.Context) {
 		return
 	}
 
-	// Запускаем обработку
 	a.runProcessing(ctx, keysToProcess)
 
 	a.log.Info("Завершение основного потока Application.Run.")

@@ -24,20 +24,14 @@ func (a *Application) prepareWalletsToProcess(ctx context.Context) ([]*keyloader
 		if err != nil {
 			if errors.Is(err, storage.ErrStateNotFound) {
 				a.log.Info("Сохраненное состояние не найдено, начинаем с начала.")
-				// No error, just means start from the beginning
 			} else {
-				// Actual error reading state
 				a.log.Error("Ошибка чтения состояния из хранилища, начинаем с начала.", "error", err)
-				// Treat as non-resumable, but maybe log it? Decide if this should stop execution.
-				// For now, we continue without resume, but return the error might be better.
-				// return nil, fmt.Errorf("ошибка чтения состояния: %w", err) // Option: Stop execution
 			}
 		} else {
 			index, convErr := strconv.Atoi(stateValue)
 			if convErr != nil {
 				a.log.Error("Ошибка конвертации сохраненного индекса, начинаем с начала.",
 					"value", stateValue, "error", convErr)
-				// Treat as non-resumable
 			} else {
 				lastCompletedIndex = index
 				a.log.Info("Обнаружено сохраненное состояние.",
@@ -55,7 +49,6 @@ func (a *Application) prepareWalletsToProcess(ctx context.Context) ([]*keyloader
 				processedWallets = []*keyloader.LoadedKey{} // All wallets were processed
 				a.log.Info("Все кошельки уже были обработаны в предыдущем сеансе.")
 			}
-			// If resuming, shuffling is disabled to maintain order
 			if shouldShuffle {
 				a.log.Warn("Возобновление состояния включено, process_order: random будет проигнорирован. Обработка продолжится последовательно.")
 				shouldShuffle = false
